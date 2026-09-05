@@ -14,10 +14,10 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
-	"github.com/spread/thousand_sunny/internal/config"
-	"github.com/spread/thousand_sunny/internal/handlers"
-	"github.com/spread/thousand_sunny/internal/migrate"
-	"github.com/spread/thousand_sunny/internal/store"
+	"github.com/spread/homeflix/internal/config"
+	"github.com/spread/homeflix/internal/handlers"
+	"github.com/spread/homeflix/internal/migrate"
+	"github.com/spread/homeflix/internal/store"
 )
 
 func main() {
@@ -72,7 +72,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("Thousand Sunny API listening on :%s", cfg.Port)
+		log.Printf("Homeflix API listening on :%s", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server: %v", err)
 		}

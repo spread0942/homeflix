@@ -4,7 +4,7 @@ services:
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
-      - --providers.docker.network=sunny
+      - --providers.docker.network=homeflix
       - --entrypoints.web.address=:80
       - --api.dashboard=false
     environment:
@@ -14,7 +14,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - sunny
+      - homeflix
     restart: unless-stopped
 
   frontend:
@@ -26,7 +26,7 @@ services:
       - traefik.http.routers.frontend.priority=1
       - traefik.http.services.frontend.loadbalancer.server.port=80
     networks:
-      - sunny
+      - homeflix
     depends_on:
       - backend
     restart: unless-stopped
@@ -46,7 +46,7 @@ services:
       - traefik.http.routers.backend.priority=100
       - traefik.http.services.backend.loadbalancer.server.port=8080
     networks:
-      - sunny
+      - homeflix
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,7 +61,7 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
     networks:
-      - sunny
+      - homeflix
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sunny -d thousand_sunny"]
       interval: 5s
@@ -70,8 +70,8 @@ services:
     restart: unless-stopped
 
 networks:
-  sunny:
-    name: sunny
+  homeflix:
+    name: homeflix
     driver: bridge
 
 volumes:

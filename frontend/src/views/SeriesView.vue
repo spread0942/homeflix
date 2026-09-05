@@ -66,24 +66,24 @@ function openFilm(id) {
 
 <template>
   <section class="series">
-    <div v-if="loading" class="state">Unrolling the sea chart…</div>
+    <div v-if="loading" class="state">Loading series…</div>
     <div v-else-if="error" class="state error">{{ error }}</div>
     <template v-else-if="series">
       <header class="hero">
         <div class="poster">
           <img v-if="series.poster_url" :src="series.poster_url" :alt="series.name" />
-          <div v-else class="poster-fallback" aria-hidden="true">☀</div>
+          <div v-else class="poster-fallback" aria-hidden="true">▶</div>
         </div>
         <div class="copy">
           <p class="eyebrow">{{ series.kind }} · {{ series.entry_count }} entries</p>
           <h1>{{ series.name }}</h1>
-          <p class="desc">{{ series.description || 'No log entry for this series yet.' }}</p>
+          <p class="desc">{{ series.description || 'No description yet.' }}</p>
           <RouterLink class="back" to="/">← Back to library</RouterLink>
         </div>
       </header>
 
       <div v-if="!series.entries?.length" class="state">
-        No entries yet. Add films to this series in <RouterLink to="/admin">Galley-La</RouterLink>.
+        No entries yet. Add films to this series in <RouterLink to="/admin">Admin</RouterLink>.
       </div>
 
       <div v-for="group in seasons" :key="group.key" class="season">
@@ -129,9 +129,9 @@ function openFilm(id) {
   max-width: 180px;
   overflow: hidden;
   border-radius: 0.85rem;
-  border: 3px solid var(--wood-brown);
-  box-shadow: 0 10px 0 color-mix(in srgb, var(--wood-brown) 35%, transparent);
-  background: var(--cream-sail);
+  border: 3px solid var(--brown);
+  box-shadow: 0 10px 0 color-mix(in srgb, var(--brown) 35%, transparent);
+  background: var(--cream);
 }
 
 .poster img {
@@ -146,7 +146,7 @@ function openFilm(id) {
   display: grid;
   place-items: center;
   font-size: 3rem;
-  background: linear-gradient(160deg, var(--sunny-yellow), var(--sea-teal));
+  background: linear-gradient(160deg, var(--accent-yellow), var(--teal));
 }
 
 .eyebrow {
@@ -155,15 +155,15 @@ function openFilm(id) {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--wood-brown);
+  color: var(--brown);
 }
 
 .copy h1 {
   margin: 0.35rem 0 0.75rem;
   font-family: var(--font-display);
   font-size: clamp(2rem, 5vw, 3.2rem);
-  color: var(--cream-sail);
-  text-shadow: 0 3px 0 color-mix(in srgb, var(--wood-brown) 50%, transparent);
+  color: var(--cream);
+  text-shadow: 0 3px 0 color-mix(in srgb, var(--brown) 50%, transparent);
 }
 
 .desc {
@@ -175,7 +175,7 @@ function openFilm(id) {
 
 .back {
   font-weight: 700;
-  color: var(--ship-orange);
+  color: var(--accent);
 }
 
 .season {
@@ -185,7 +185,7 @@ function openFilm(id) {
 .season h2 {
   margin: 0 0 0.85rem;
   font-family: var(--font-display);
-  color: var(--cream-sail);
+  color: var(--cream);
 }
 
 .list {
@@ -203,9 +203,9 @@ function openFilm(id) {
   gap: 0.85rem;
   align-items: center;
   padding: 0.65rem;
-  border: 2px solid color-mix(in srgb, var(--wood-brown) 25%, transparent);
+  border: 2px solid color-mix(in srgb, var(--brown) 25%, transparent);
   border-radius: 0.85rem;
-  background: color-mix(in srgb, var(--cream-sail) 90%, transparent);
+  background: color-mix(in srgb, var(--cream) 90%, transparent);
   text-align: left;
   color: inherit;
   transition: transform 0.2s ease, border-color 0.2s ease;
@@ -213,7 +213,7 @@ function openFilm(id) {
 
 .row:hover {
   transform: translateX(4px);
-  border-color: var(--ship-orange);
+  border-color: var(--accent);
 }
 
 .row img {
@@ -221,7 +221,7 @@ function openFilm(id) {
   height: 84px;
   object-fit: cover;
   border-radius: 0.35rem;
-  border: 2px solid var(--wood-brown);
+  border: 2px solid var(--brown);
 }
 
 .ep {
@@ -229,13 +229,13 @@ function openFilm(id) {
   margin-bottom: 0.2rem;
   font-size: 0.75rem;
   font-weight: 700;
-  color: var(--sea-teal);
+  color: var(--teal);
 }
 
 .meta strong {
   display: block;
   font-family: var(--font-display);
-  color: var(--wood-brown);
+  color: var(--brown);
 }
 
 .meta p {
@@ -250,7 +250,7 @@ function openFilm(id) {
 
 .state {
   padding: 1.5rem;
-  background: color-mix(in srgb, var(--cream-sail) 88%, transparent);
+  background: color-mix(in srgb, var(--cream) 88%, transparent);
   border-radius: 1rem;
 }
 

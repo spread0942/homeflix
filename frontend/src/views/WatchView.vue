@@ -84,7 +84,7 @@ function onVideoError() {
     return
   }
   playError.value =
-    'This browser cannot play the file (often MKV or HEVC). Prefer H.264 + AAC in an MP4 container — the Sunny will auto-convert unsupported uploads.'
+    'This browser cannot play the file (often MKV or HEVC). Prefer H.264 + AAC in an MP4 container — Homeflix will auto-convert unsupported uploads.'
 }
 
 function isTypingTarget(el) {
@@ -215,17 +215,17 @@ onUnmounted(() => {
 
 <template>
   <section class="watch">
-    <div v-if="loading" class="state">Opening the den den projector…</div>
+    <div v-if="loading" class="state">Loading player…</div>
     <div v-else-if="error" class="state error">{{ error }}</div>
     <template v-else-if="film">
       <div v-if="film.playback_status === 'processing'" class="banner">
         Converting to browser-friendly MP4 (H.264). Large films can take a while — this page will
         unlock when ready. Track all jobs in
-        <RouterLink to="/conversions">Den Den Workshop</RouterLink>.
+        <RouterLink to="/conversions">Conversions</RouterLink>.
       </div>
       <div v-else-if="film.playback_status === 'failed'" class="banner err">
         Conversion failed. Retry from
-        <RouterLink to="/conversions">Den Den Workshop</RouterLink>, or re-upload an H.264 MP4.
+        <RouterLink to="/conversions">Conversions</RouterLink>, or re-upload an H.264 MP4.
       </div>
       <div
         class="player-shell"
@@ -283,13 +283,13 @@ onUnmounted(() => {
           </div>
         </template>
         <div v-else class="waiting" :style="{ backgroundImage: `url(${film.poster_url})` }">
-          <p v-if="film.playback_status === 'processing'">Preparing the den den projector…</p>
+          <p v-if="film.playback_status === 'processing'">Preparing video…</p>
           <p v-else>Playback not ready.</p>
         </div>
       </div>
       <p v-if="playError" class="banner err">{{ playError }}</p>
       <div class="details">
-        <p class="eyebrow">Now sailing</p>
+        <p class="eyebrow">Now playing</p>
         <h1>{{ film.name }}</h1>
         <p v-if="film.series_name" class="series-line">
           <RouterLink
@@ -317,7 +317,7 @@ onUnmounted(() => {
         >
           ← Back to {{ film.series_name }}
         </RouterLink>
-        <RouterLink v-else class="back" to="/">← Back to the Sunny library</RouterLink>
+        <RouterLink v-else class="back" to="/">← Back to library</RouterLink>
       </div>
     </template>
   </section>
@@ -334,8 +334,8 @@ onUnmounted(() => {
   padding: 0.85rem 1rem;
   border-radius: 0.75rem;
   font-weight: 700;
-  background: color-mix(in srgb, var(--sea-teal) 18%, var(--cream-sail));
-  color: var(--sea-teal);
+  background: color-mix(in srgb, var(--teal) 18%, var(--cream));
+  color: var(--teal);
 }
 
 .banner.err {
@@ -347,7 +347,7 @@ onUnmounted(() => {
   position: relative;
   border-radius: 1rem;
   overflow: hidden;
-  border: 3px solid var(--wood-brown);
+  border: 3px solid var(--brown);
   background: #111;
   box-shadow: 0 16px 40px var(--shadow);
 }
@@ -366,7 +366,7 @@ video,
   place-items: center;
   background-size: cover;
   background-position: center;
-  color: var(--cream-sail);
+  color: var(--cream);
   font-weight: 700;
   text-shadow: 0 2px 8px #000;
 }
@@ -399,7 +399,7 @@ video,
   border: 2px solid rgba(255, 248, 231, 0.55);
   border-radius: 50%;
   background: rgba(42, 26, 16, 0.72);
-  color: var(--cream-sail);
+  color: var(--cream);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
   transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
@@ -408,7 +408,7 @@ video,
 .ctl:focus-visible {
   transform: scale(1.06);
   background: rgba(232, 93, 4, 0.9);
-  border-color: var(--sunny-yellow);
+  border-color: var(--accent-yellow);
   outline: none;
 }
 
@@ -416,7 +416,7 @@ video,
   width: clamp(4rem, 10vw, 5.2rem);
   height: clamp(4rem, 10vw, 5.2rem);
   background: rgba(232, 93, 4, 0.88);
-  border-color: var(--sunny-yellow);
+  border-color: var(--accent-yellow);
 }
 
 .icon {
@@ -441,7 +441,7 @@ video,
   padding: 0.55rem 0.9rem;
   border-radius: 999px;
   background: rgba(42, 26, 16, 0.75);
-  color: var(--sunny-yellow);
+  color: var(--accent-yellow);
   font-weight: 800;
   opacity: 0;
   pointer-events: none;
@@ -465,8 +465,8 @@ video,
   margin-top: 1.5rem;
   max-width: 48rem;
   padding: 1.25rem 1.4rem;
-  background: color-mix(in srgb, var(--cream-sail) 90%, transparent);
-  border: 2px solid color-mix(in srgb, var(--wood-brown) 28%, transparent);
+  background: color-mix(in srgb, var(--cream) 90%, transparent);
+  border: 2px solid color-mix(in srgb, var(--brown) 28%, transparent);
   border-radius: 1rem;
 }
 
@@ -476,14 +476,14 @@ video,
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--sea-teal);
+  color: var(--teal);
 }
 
 .details h1 {
   margin: 0.35rem 0 0.75rem;
   font-family: var(--font-display);
   font-size: clamp(1.8rem, 4vw, 2.6rem);
-  color: var(--wood-brown);
+  color: var(--brown);
 }
 
 .desc {
@@ -502,35 +502,35 @@ video,
   display: inline-block;
   margin: 0 0.1rem;
   padding: 0.12rem 0.4rem;
-  border: 1px solid color-mix(in srgb, var(--wood-brown) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brown) 35%, transparent);
   border-bottom-width: 2px;
   border-radius: 0.35rem;
   background: #fff;
   font: inherit;
   font-size: 0.8rem;
-  color: var(--wood-brown);
+  color: var(--brown);
 }
 
 .series-line {
   margin: 0 0 0.75rem;
   font-weight: 700;
-  color: var(--sea-teal);
+  color: var(--teal);
 }
 
 .series-link {
-  color: var(--sea-teal);
+  color: var(--teal);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .back {
   font-weight: 700;
-  color: var(--ship-orange);
+  color: var(--accent);
 }
 
 .state {
   padding: 2rem;
-  background: color-mix(in srgb, var(--cream-sail) 88%, transparent);
+  background: color-mix(in srgb, var(--cream) 88%, transparent);
   border-radius: 1rem;
 }
 

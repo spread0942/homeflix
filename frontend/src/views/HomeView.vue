@@ -53,25 +53,25 @@ function subtitle(item) {
 <template>
   <section class="home">
     <div class="hero">
-      <p class="eyebrow">Pirate King Media Deck</p>
-      <h1>Thousand Sunny</h1>
-      <p class="tagline">Your private Grand Line of films — chart a Log Pose and set sail.</p>
+      <p class="eyebrow">Personal streaming</p>
+      <h1>Homeflix</h1>
+      <p class="tagline">Your private film library — search and watch at home.</p>
       <label class="search">
         <span class="sr-only">Search by name or description</span>
         <input
           v-model="query"
           type="search"
-          placeholder="Log Pose: search series, films, or descriptions…"
+          placeholder="Search series, films, or descriptions…"
           autocomplete="off"
         />
       </label>
     </div>
 
     <div class="library">
-      <div v-if="loading" class="state">Scanning the sea charts…</div>
+      <div v-if="loading" class="state">Loading library…</div>
       <div v-else-if="error" class="state error">{{ error }}</div>
       <div v-else-if="!items.length" class="state">
-        No films aboard yet. Head to <RouterLink to="/admin">Galley-La</RouterLink> to load cargo.
+        No films yet. Head to <RouterLink to="/admin">Admin</RouterLink> to upload.
       </div>
       <ul v-else class="grid">
         <li v-for="item in items" :key="`${item.type}-${item.id}`">
@@ -83,7 +83,7 @@ function subtitle(item) {
                 :alt="item.name"
                 loading="lazy"
               />
-              <div v-else class="poster-fallback" aria-hidden="true">☀</div>
+              <div v-else class="poster-fallback" aria-hidden="true">▶</div>
               <span v-if="item.type === 'series'" class="badge">Series</span>
             </div>
             <div class="meta">
@@ -114,7 +114,7 @@ function subtitle(item) {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-size: 0.78rem;
-  color: var(--wood-brown);
+  color: var(--brown);
 }
 
 .hero h1 {
@@ -122,8 +122,8 @@ function subtitle(item) {
   font-family: var(--font-display);
   font-size: clamp(3rem, 10vw, 5.5rem);
   line-height: 0.95;
-  color: var(--cream-sail);
-  text-shadow: 0 4px 0 color-mix(in srgb, var(--wood-brown) 55%, transparent);
+  color: var(--cream);
+  text-shadow: 0 4px 0 color-mix(in srgb, var(--brown) 55%, transparent);
 }
 
 .tagline {
@@ -140,7 +140,7 @@ function subtitle(item) {
 .search input {
   width: min(100%, 34rem);
   padding: 0.9rem 1.15rem;
-  border: 2px solid var(--wood-brown);
+  border: 2px solid var(--brown);
   border-radius: 999px;
   background: var(--foam);
   color: var(--ink);
@@ -150,7 +150,7 @@ function subtitle(item) {
 }
 
 .search input:focus {
-  border-color: var(--ship-orange);
+  border-color: var(--accent);
   transform: translateY(-2px);
   box-shadow: 0 12px 28px var(--shadow);
 }
@@ -161,8 +161,8 @@ function subtitle(item) {
 
 .state {
   padding: 2rem;
-  background: color-mix(in srgb, var(--cream-sail) 88%, transparent);
-  border: 2px solid color-mix(in srgb, var(--wood-brown) 30%, transparent);
+  background: color-mix(in srgb, var(--cream) 88%, transparent);
+  border: 2px solid color-mix(in srgb, var(--brown) 30%, transparent);
   border-radius: 1rem;
 }
 
@@ -200,9 +200,9 @@ function subtitle(item) {
   aspect-ratio: 2 / 3;
   overflow: hidden;
   border-radius: 0.85rem;
-  border: 3px solid var(--wood-brown);
-  background: var(--cream-sail);
-  box-shadow: 0 10px 0 color-mix(in srgb, var(--wood-brown) 35%, transparent);
+  border: 3px solid var(--brown);
+  background: var(--cream);
+  box-shadow: 0 10px 0 color-mix(in srgb, var(--brown) 35%, transparent);
 }
 
 .poster-wrap img {
@@ -218,8 +218,8 @@ function subtitle(item) {
   display: grid;
   place-items: center;
   font-size: 3rem;
-  background: linear-gradient(160deg, var(--sunny-yellow), var(--sea-teal));
-  color: var(--wood-brown);
+  background: linear-gradient(160deg, var(--accent-yellow), var(--teal));
+  color: var(--brown);
 }
 
 .card:hover .poster-wrap img {
@@ -236,8 +236,8 @@ function subtitle(item) {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  background: var(--ship-orange);
-  color: var(--cream-sail);
+  background: var(--accent);
+  color: var(--cream);
 }
 
 .meta {
@@ -248,13 +248,13 @@ function subtitle(item) {
   margin: 0;
   font-family: var(--font-display);
   font-size: 1.15rem;
-  color: var(--cream-sail);
+  color: var(--cream);
 }
 
 .meta p {
   margin: 0.35rem 0 0;
   font-size: 0.9rem;
-  color: color-mix(in srgb, var(--cream-sail) 85%, var(--ink));
+  color: color-mix(in srgb, var(--cream) 85%, var(--ink));
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;

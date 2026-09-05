@@ -1,9 +1,9 @@
 :root {
-  --sunny-yellow: #f5c518;
-  --ship-orange: #e85d04;
-  --wood-brown: #5c3a21;
-  --sea-teal: #0a7a7a;
-  --cream-sail: #fff8e7;
+  --accent-yellow: #f5c518;
+  --accent: #e85d04;
+  --brown: #5c3a21;
+  --teal: #0a7a7a;
+  --cream: #fff8e7;
   --ink: #2a1a10;
   --foam: rgba(255, 248, 231, 0.92);
   --shadow: rgba(42, 26, 16, 0.18);

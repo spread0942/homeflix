@@ -10,20 +10,20 @@ const isHome = computed(() => route.name === 'home')
   <div class="shell">
     <header class="topbar" :class="{ compact: !isHome }">
       <RouterLink class="brand" to="/">
-        <span class="brand-mark" aria-hidden="true">☀</span>
-        <span class="brand-text">Thousand Sunny</span>
+        <span class="brand-mark" aria-hidden="true">▶</span>
+        <span class="brand-text">Homeflix</span>
       </RouterLink>
       <nav class="nav">
         <RouterLink to="/">Library</RouterLink>
-        <RouterLink to="/conversions">Workshop</RouterLink>
-        <RouterLink to="/admin">Galley-La</RouterLink>
+        <RouterLink to="/conversions">Conversions</RouterLink>
+        <RouterLink to="/admin">Admin</RouterLink>
       </nav>
     </header>
     <main>
       <RouterView />
     </main>
     <footer class="footer">
-      <p>Set sail with your own crew archive — personal use only.</p>
+      <p>Personal film library — for your home use only.</p>
     </footer>
   </div>
 </template>
@@ -46,9 +46,9 @@ const isHome = computed(() => route.name === 'home')
 
 .topbar.compact {
   padding-block: 0.85rem;
-  background: color-mix(in srgb, var(--cream-sail) 82%, transparent);
+  background: color-mix(in srgb, var(--cream) 82%, transparent);
   backdrop-filter: blur(8px);
-  border-bottom: 2px solid color-mix(in srgb, var(--wood-brown) 25%, transparent);
+  border-bottom: 2px solid color-mix(in srgb, var(--brown) 25%, transparent);
 }
 
 .brand {
@@ -59,7 +59,7 @@ const isHome = computed(() => route.name === 'home')
   font-weight: 700;
   font-size: clamp(1.35rem, 3vw, 1.85rem);
   letter-spacing: 0.01em;
-  color: var(--wood-brown);
+  color: var(--brown);
 }
 
 .brand-mark {
@@ -68,9 +68,10 @@ const isHome = computed(() => route.name === 'home')
   width: 2.1rem;
   height: 2.1rem;
   border-radius: 50%;
-  background: var(--sunny-yellow);
-  color: var(--ship-orange);
-  box-shadow: 0 4px 0 color-mix(in srgb, var(--ship-orange) 45%, transparent);
+  background: var(--accent-yellow);
+  color: var(--accent);
+  font-size: 0.75rem;
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 45%, transparent);
   animation: softPulse 4s ease-in-out infinite;
 }
 
@@ -85,14 +86,14 @@ const isHome = computed(() => route.name === 'home')
   padding: 0.45rem 0.9rem;
   border-radius: 999px;
   font-weight: 700;
-  color: var(--cream-sail);
-  background: var(--sea-teal);
+  color: var(--cream);
+  background: var(--teal);
   transition: transform 0.2s ease, background 0.2s ease;
 }
 
 .nav a:hover,
 .nav a.router-link-active {
-  background: var(--ship-orange);
+  background: var(--accent);
   transform: translateY(-1px);
 }
 
@@ -102,7 +103,7 @@ main {
 
 .footer {
   padding: 1.5rem clamp(1rem, 4vw, 3rem) 2rem;
-  color: var(--cream-sail);
+  color: var(--cream);
   opacity: 0.9;
   font-size: 0.95rem;
 }

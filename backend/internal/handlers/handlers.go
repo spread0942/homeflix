@@ -17,10 +17,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/spread/thousand_sunny/internal/imageconv"
-	"github.com/spread/thousand_sunny/internal/models"
-	"github.com/spread/thousand_sunny/internal/store"
-	"github.com/spread/thousand_sunny/internal/transcode"
+	"github.com/spread/homeflix/internal/imageconv"
+	"github.com/spread/homeflix/internal/models"
+	"github.com/spread/homeflix/internal/store"
+	"github.com/spread/homeflix/internal/transcode"
 )
 
 const maxUpload = 4 << 30 // 4 GiB

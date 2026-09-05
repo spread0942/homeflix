@@ -1,6 +1,6 @@
-# Thousand Sunny
+# Homeflix
 
-Personal Netflix-style film streaming with a One Piece / Thousand Sunny theme. No authentication — local use only.
+Personal Netflix-style film streaming. No authentication — local / home use only.
 
 ## Stack
 
@@ -28,8 +28,8 @@ docker compose -f docker-compose.yml up --build
 - **Home** — series cards + standalone films (search both)
 - **Series** — seasons / parts list for a franchise or show
 - **Watch** — HTML5 player with range seeking + keyboard shortcuts
-- **Workshop (`/conversions`)** — live conversion queue (processing / ready / failed)
-- **Galley-La (`/admin`)** — create series, upload films with season/episode/sort
+- **Conversions (`/conversions`)** — live conversion queue (processing / ready / failed)
+- **Admin (`/admin`)** — create series, upload films with season/episode/sort
 
 ## Grouping films
 
@@ -42,7 +42,7 @@ docker compose -f docker-compose.yml up --build
 
 | Variable | Default (Compose) | Purpose |
 |----------|-------------------|---------|
-| `DATABASE_URL` | `postgres://sunny:sunny@postgres:5432/thousand_sunny?sslmode=disable` | Postgres connection |
+| `DATABASE_URL` | `postgres://sunny:sunny@postgres:5432/thousand_sunny?sslmode=disable` | Postgres connection (name kept for existing volume) |
 | `MEDIA_ROOT` | `/data` | Video + poster storage |
 | `PORT` | `8080` | API listen port |
 

@@ -88,7 +88,7 @@ async function retry(film) {
 }
 
 async function remove(film) {
-  if (!confirm(`Throw "${film.name}" overboard?`)) return
+  if (!confirm(`Delete "${film.name}"?`)) return
   error.value = ''
   try {
     await deleteAnimation(film.id)
@@ -108,11 +108,10 @@ onUnmounted(() => clearInterval(pollTimer))
 <template>
   <section class="conversions">
     <header class="intro">
-      <p class="eyebrow">Engine room</p>
-      <h1>Den Den Workshop</h1>
+      <p class="eyebrow">Transcoding</p>
+      <h1>Conversions</h1>
       <p>
-        Live conversion queue for browser playback. Unsupported uploads (MKV, HEVC, …) become H.264
-        MP4 here.
+        Live queue for browser playback. Unsupported uploads (MKV, HEVC, …) become H.264 MP4 here.
       </p>
     </header>
 
@@ -132,7 +131,7 @@ onUnmounted(() => clearInterval(pollTimer))
     </div>
 
     <p v-if="error" class="banner err">{{ error }}</p>
-    <div v-if="loading && !films.length" class="state">Checking the workshop…</div>
+    <div v-if="loading && !films.length" class="state">Loading…</div>
 
     <ul v-else-if="sorted.length" class="queue">
       <li v-for="film in sorted" :key="film.id" :class="film.playback_status">
@@ -190,10 +189,10 @@ onUnmounted(() => clearInterval(pollTimer))
         </div>
       </li>
     </ul>
-    <div v-else class="state">No films in the hold yet. Upload from Galley-La.</div>
+    <div v-else class="state">No films yet. Upload from Admin.</div>
 
     <p class="foot">
-      <RouterLink to="/admin">← Back to Galley-La</RouterLink>
+      <RouterLink to="/admin">← Back to Admin</RouterLink>
       · Auto-refreshes every 4s
     </p>
   </section>
@@ -216,15 +215,15 @@ onUnmounted(() => clearInterval(pollTimer))
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--wood-brown);
+  color: var(--brown);
 }
 
 .intro h1 {
   margin: 0.35rem 0 0.6rem;
   font-family: var(--font-display);
   font-size: clamp(2.2rem, 6vw, 3.4rem);
-  color: var(--cream-sail);
-  text-shadow: 0 3px 0 color-mix(in srgb, var(--wood-brown) 50%, transparent);
+  color: var(--cream);
+  text-shadow: 0 3px 0 color-mix(in srgb, var(--brown) 50%, transparent);
 }
 
 .intro p {
@@ -243,8 +242,8 @@ onUnmounted(() => clearInterval(pollTimer))
 .stat {
   padding: 0.9rem 1rem;
   border-radius: 0.85rem;
-  background: color-mix(in srgb, var(--cream-sail) 90%, transparent);
-  border: 2px solid color-mix(in srgb, var(--wood-brown) 22%, transparent);
+  background: color-mix(in srgb, var(--cream) 90%, transparent);
+  border: 2px solid color-mix(in srgb, var(--brown) 22%, transparent);
 }
 
 .stat strong {
@@ -252,7 +251,7 @@ onUnmounted(() => clearInterval(pollTimer))
   font-family: var(--font-display);
   font-size: 1.8rem;
   line-height: 1;
-  color: var(--wood-brown);
+  color: var(--brown);
 }
 
 .stat span {
@@ -261,11 +260,11 @@ onUnmounted(() => clearInterval(pollTimer))
 }
 
 .stat.processing strong {
-  color: var(--ship-orange);
+  color: var(--accent);
 }
 
 .stat.ready strong {
-  color: var(--sea-teal);
+  color: var(--teal);
 }
 
 .stat.failed strong {
@@ -296,13 +295,13 @@ onUnmounted(() => clearInterval(pollTimer))
   gap: 1rem;
   align-items: center;
   padding: 0.85rem;
-  background: color-mix(in srgb, var(--cream-sail) 92%, transparent);
-  border: 2px solid color-mix(in srgb, var(--wood-brown) 25%, transparent);
+  background: color-mix(in srgb, var(--cream) 92%, transparent);
+  border: 2px solid color-mix(in srgb, var(--brown) 25%, transparent);
   border-radius: 0.95rem;
 }
 
 .queue li.processing {
-  border-color: var(--ship-orange);
+  border-color: var(--accent);
 }
 
 .queue li.failed {
@@ -314,7 +313,7 @@ onUnmounted(() => clearInterval(pollTimer))
   height: 108px;
   object-fit: cover;
   border-radius: 0.45rem;
-  border: 2px solid var(--wood-brown);
+  border: 2px solid var(--brown);
 }
 
 .title-row {
@@ -327,7 +326,7 @@ onUnmounted(() => clearInterval(pollTimer))
 .title-row strong {
   font-family: var(--font-display);
   font-size: 1.15rem;
-  color: var(--wood-brown);
+  color: var(--brown);
 }
 
 .badge {
@@ -340,13 +339,13 @@ onUnmounted(() => clearInterval(pollTimer))
 }
 
 .badge.processing {
-  background: var(--ship-orange);
-  color: var(--cream-sail);
+  background: var(--accent);
+  color: var(--cream);
 }
 
 .badge.ready {
-  background: var(--sea-teal);
-  color: var(--cream-sail);
+  background: var(--teal);
+  color: var(--cream);
 }
 
 .badge.failed {
@@ -369,7 +368,7 @@ onUnmounted(() => clearInterval(pollTimer))
   margin-top: 0.65rem;
   height: 0.45rem;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--wood-brown) 18%, transparent);
+  background: color-mix(in srgb, var(--brown) 18%, transparent);
   overflow: hidden;
 }
 
@@ -378,7 +377,7 @@ onUnmounted(() => clearInterval(pollTimer))
   height: 100%;
   width: 40%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--sunny-yellow), var(--ship-orange));
+  background: linear-gradient(90deg, var(--accent-yellow), var(--accent));
   animation: slide 1.4s ease-in-out infinite;
 }
 
@@ -409,20 +408,20 @@ onUnmounted(() => clearInterval(pollTimer))
 }
 
 .actions a {
-  background: var(--sea-teal);
-  color: var(--cream-sail);
+  background: var(--teal);
+  color: var(--cream);
 }
 
 .actions a.ghost {
   background: transparent;
-  color: var(--sea-teal);
-  border: 1px solid var(--sea-teal);
+  color: var(--teal);
+  border: 1px solid var(--teal);
 }
 
 .retry {
-  border: 1px solid var(--ship-orange);
+  border: 1px solid var(--accent);
   background: transparent;
-  color: var(--ship-orange);
+  color: var(--accent);
 }
 
 .retry:disabled {
@@ -438,18 +437,18 @@ onUnmounted(() => clearInterval(pollTimer))
 
 .state {
   padding: 1.25rem;
-  background: color-mix(in srgb, var(--cream-sail) 88%, transparent);
+  background: color-mix(in srgb, var(--cream) 88%, transparent);
   border-radius: 0.85rem;
 }
 
 .foot {
   margin-top: 1.5rem;
   font-weight: 700;
-  color: var(--cream-sail);
+  color: var(--cream);
 }
 
 .foot a {
-  color: var(--sunny-yellow);
+  color: var(--accent-yellow);
 }
 
 @media (max-width: 700px) {

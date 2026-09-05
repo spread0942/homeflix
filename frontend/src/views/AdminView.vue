@@ -80,7 +80,7 @@ async function onCreateSeries(e) {
   seriesSubmitting.value = true
   try {
     const created = await createSeries(form)
-    success.value = `Series "${created.name}" is charted.`
+    success.value = `Series "${created.name}" created.`
     seriesName.value = ''
     seriesDescription.value = ''
     seriesKind.value = 'franchise'
@@ -118,7 +118,7 @@ async function onSubmit(e) {
   submitting.value = true
   try {
     await createAnimation(form)
-    success.value = `"${name.value.trim()}" is aboard the Sunny.`
+    success.value = `"${name.value.trim()}" uploaded.`
     const keepSeries = seriesId.value
     name.value = ''
     description.value = ''
@@ -138,7 +138,7 @@ async function onSubmit(e) {
 }
 
 async function removeFilm(id, filmName) {
-  if (!confirm(`Throw "${filmName}" overboard?`)) return
+  if (!confirm(`Delete "${filmName}"?`)) return
   error.value = ''
   try {
     await deleteAnimation(id)
@@ -173,12 +173,12 @@ function filmMeta(film) {
 <template>
   <section class="admin">
     <header class="intro">
-      <p class="eyebrow">Shipwright desk</p>
-      <h1>Galley-La Dock</h1>
+      <p class="eyebrow">Administration</p>
+      <h1>Admin</h1>
       <p>
-        Manage series and films in separate desks. Posters are stored as
+        Manage series and films in separate tabs. Posters are stored as
         <strong>WebP</strong>. Track video conversion in
-        <RouterLink class="inline-link" to="/conversions">Den Den Workshop</RouterLink>.
+        <RouterLink class="inline-link" to="/conversions">Conversions</RouterLink>.
       </p>
     </header>
 
@@ -265,13 +265,13 @@ function filmMeta(film) {
           </label>
         </div>
         <button class="submit" type="submit" :disabled="submitting">
-          {{ submitting ? 'Loading cargo…' : 'Stow aboard' }}
+          {{ submitting ? 'Uploading…' : 'Upload' }}
         </button>
       </form>
 
       <div class="inventory">
         <h2>All films</h2>
-        <div v-if="loading" class="state">Counting barrels…</div>
+        <div v-if="loading" class="state">Loading…</div>
         <ul v-else-if="films.length" class="list">
           <li v-for="film in films" :key="film.id">
             <img :src="film.poster_url" :alt="film.name" />
@@ -292,7 +292,7 @@ function filmMeta(film) {
             </div>
           </li>
         </ul>
-        <div v-else class="state">Hold is empty.</div>
+        <div v-else class="state">No films yet.</div>
       </div>
     </div>
 
@@ -334,17 +334,17 @@ function filmMeta(film) {
           </label>
         </div>
         <button class="submit" type="submit" :disabled="seriesSubmitting">
-          {{ seriesSubmitting ? 'Charting…' : 'Create series' }}
+          {{ seriesSubmitting ? 'Creating…' : 'Create series' }}
         </button>
       </form>
 
       <div class="inventory">
         <h2>Series</h2>
-        <div v-if="loading" class="state">Counting barrels…</div>
+        <div v-if="loading" class="state">Loading…</div>
         <ul v-else-if="seriesList.length" class="list">
           <li v-for="s in seriesList" :key="s.id">
             <img v-if="s.poster_url" :src="s.poster_url" :alt="s.name" />
-            <div v-else class="thumb-fallback">☀</div>
+            <div v-else class="thumb-fallback">▶</div>
             <div>
               <strong>{{ s.name }}</strong>
               <p>{{ s.kind }} · {{ s.entry_count }} entries</p>
@@ -357,7 +357,7 @@ function filmMeta(film) {
             </div>
           </li>
         </ul>
-        <div v-else class="state">No series charted yet.</div>
+        <div v-else class="state">No series yet.</div>
       </div>
     </div>
   </section>
@@ -380,15 +380,15 @@ function filmMeta(film) {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--wood-brown);
+  color: var(--brown);
 }
 
 .intro h1 {
   margin: 0.35rem 0 0.6rem;
   font-family: var(--font-display);
   font-size: clamp(2.2rem, 6vw, 3.4rem);
-  color: var(--cream-sail);
-  text-shadow: 0 3px 0 color-mix(in srgb, var(--wood-brown) 50%, transparent);
+  color: var(--cream);
+  text-shadow: 0 3px 0 color-mix(in srgb, var(--brown) 50%, transparent);
 }
 
 .intro p {
@@ -397,7 +397,7 @@ function filmMeta(film) {
 }
 
 .inline-link {
-  color: var(--ship-orange);
+  color: var(--accent);
   font-weight: 800;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -411,22 +411,22 @@ function filmMeta(film) {
 
 .tab {
   padding: 0.55rem 1.15rem;
-  border: 2px solid color-mix(in srgb, var(--wood-brown) 35%, transparent);
+  border: 2px solid color-mix(in srgb, var(--brown) 35%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--cream-sail) 85%, transparent);
-  color: var(--wood-brown);
+  background: color-mix(in srgb, var(--cream) 85%, transparent);
+  color: var(--brown);
   font-weight: 800;
   transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 .tab:hover {
-  border-color: var(--ship-orange);
+  border-color: var(--accent);
 }
 
 .tab.active {
-  background: var(--ship-orange);
-  border-color: var(--ship-orange);
-  color: var(--cream-sail);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--cream);
 }
 
 .status-pill {
@@ -442,13 +442,13 @@ function filmMeta(film) {
 }
 
 .status-pill.ready {
-  background: color-mix(in srgb, var(--sea-teal) 25%, transparent);
-  color: var(--sea-teal);
+  background: color-mix(in srgb, var(--teal) 25%, transparent);
+  color: var(--teal);
 }
 
 .status-pill.processing {
-  background: color-mix(in srgb, var(--ship-orange) 30%, transparent);
-  color: var(--ship-orange);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent);
 }
 
 .status-pill.failed {
@@ -462,8 +462,8 @@ function filmMeta(film) {
   max-width: 40rem;
   padding: 1.25rem;
   margin-bottom: 1.25rem;
-  background: color-mix(in srgb, var(--cream-sail) 92%, transparent);
-  border: 2px solid color-mix(in srgb, var(--wood-brown) 30%, transparent);
+  background: color-mix(in srgb, var(--cream) 92%, transparent);
+  border: 2px solid color-mix(in srgb, var(--brown) 30%, transparent);
   border-radius: 1rem;
 }
 
@@ -471,20 +471,20 @@ function filmMeta(film) {
   margin: 0;
   font-family: var(--font-display);
   font-size: 1.35rem;
-  color: var(--wood-brown);
+  color: var(--brown);
 }
 
 label {
   display: grid;
   gap: 0.4rem;
   font-weight: 700;
-  color: var(--wood-brown);
+  color: var(--brown);
 }
 
 .field-note {
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--sea-teal);
+  color: var(--teal);
 }
 
 input,
@@ -492,7 +492,7 @@ textarea,
 select {
   width: 100%;
   padding: 0.7rem 0.85rem;
-  border: 2px solid color-mix(in srgb, var(--wood-brown) 40%, transparent);
+  border: 2px solid color-mix(in srgb, var(--brown) 40%, transparent);
   border-radius: 0.65rem;
   background: #fff;
   color: var(--ink);
@@ -520,7 +520,7 @@ select {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--sea-teal);
+  color: var(--teal);
 }
 
 .submit {
@@ -529,9 +529,9 @@ select {
   border: none;
   border-radius: 999px;
   font-weight: 700;
-  color: var(--cream-sail);
-  background: var(--ship-orange);
-  box-shadow: 0 4px 0 color-mix(in srgb, var(--wood-brown) 55%, transparent);
+  color: var(--cream);
+  background: var(--accent);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--brown) 55%, transparent);
   transition: transform 0.2s ease;
 }
 
@@ -553,8 +553,8 @@ select {
 }
 
 .banner.ok {
-  background: color-mix(in srgb, var(--sea-teal) 20%, var(--cream-sail));
-  color: var(--sea-teal);
+  background: color-mix(in srgb, var(--teal) 20%, var(--cream));
+  color: var(--teal);
 }
 
 .banner.err {
@@ -569,7 +569,7 @@ select {
 .inventory h2 {
   margin: 0 0 1rem;
   font-family: var(--font-display);
-  color: var(--cream-sail);
+  color: var(--cream);
 }
 
 .list {
@@ -586,8 +586,8 @@ select {
   gap: 0.9rem;
   align-items: center;
   padding: 0.75rem;
-  background: color-mix(in srgb, var(--cream-sail) 90%, transparent);
-  border: 2px solid color-mix(in srgb, var(--wood-brown) 25%, transparent);
+  background: color-mix(in srgb, var(--cream) 90%, transparent);
+  border: 2px solid color-mix(in srgb, var(--brown) 25%, transparent);
   border-radius: 0.85rem;
 }
 
@@ -597,13 +597,13 @@ select {
   height: 96px;
   object-fit: cover;
   border-radius: 0.4rem;
-  border: 2px solid var(--wood-brown);
+  border: 2px solid var(--brown);
 }
 
 .thumb-fallback {
   display: grid;
   place-items: center;
-  background: linear-gradient(160deg, var(--sunny-yellow), var(--sea-teal));
+  background: linear-gradient(160deg, var(--accent-yellow), var(--teal));
   font-size: 1.5rem;
 }
 
@@ -633,8 +633,8 @@ select {
 }
 
 .actions a {
-  background: var(--sea-teal);
-  color: var(--cream-sail);
+  background: var(--teal);
+  color: var(--cream);
 }
 
 .danger {
@@ -645,7 +645,7 @@ select {
 
 .state {
   padding: 1.25rem;
-  background: color-mix(in srgb, var(--cream-sail) 88%, transparent);
+  background: color-mix(in srgb, var(--cream) 88%, transparent);
   border-radius: 0.85rem;
 }
 

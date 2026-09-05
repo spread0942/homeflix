@@ -1,4 +1,4 @@
-module github.com/spread/thousand_sunny
+module github.com/spread/homeflix
 
 go 1.22
 
