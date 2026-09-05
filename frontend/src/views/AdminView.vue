@@ -9,6 +9,8 @@ import {
   listSeries,
 } from '../api'
 
+const tab = ref('films') // 'films' | 'series'
+
 const films = ref([])
 const seriesList = ref([])
 const loading = ref(true)
@@ -174,150 +176,189 @@ function filmMeta(film) {
       <p class="eyebrow">Shipwright desk</p>
       <h1>Galley-La Dock</h1>
       <p>
-        Chart a series (Dune, Bleach, …), then stow films with season / episode / part order.
-        <strong>Firefox needs H.264 + AAC in MP4</strong> — MKV/HEVC uploads are auto-converted in the
-        background. Track progress in
+        Manage series and films in separate desks. Posters are stored as
+        <strong>WebP</strong>. Track video conversion in
         <RouterLink class="inline-link" to="/conversions">Den Den Workshop</RouterLink>.
       </p>
     </header>
 
-    <form class="form" @submit="onCreateSeries">
-      <h2>New series</h2>
-      <label>
-        Series name
-        <input v-model="seriesName" type="text" required maxlength="200" placeholder="e.g. Bleach" />
-      </label>
-      <label>
-        Description
-        <textarea
-          v-model="seriesDescription"
-          rows="2"
-          maxlength="2000"
-          placeholder="Optional series synopsis"
-        />
-      </label>
-      <div class="row2">
-        <label>
-          Kind
-          <select v-model="seriesKind">
-            <option value="franchise">Franchise (movies)</option>
-            <option value="anime">Anime</option>
-            <option value="tv">TV show</option>
-          </select>
-        </label>
-        <label>
-          Cover poster (optional)
-          <input type="file" accept="image/*" @change="onSeriesPosterChange" />
-        </label>
-      </div>
-      <button class="submit" type="submit" :disabled="seriesSubmitting">
-        {{ seriesSubmitting ? 'Charting…' : 'Create series' }}
+    <nav class="tabs" aria-label="Admin sections">
+      <button
+        type="button"
+        class="tab"
+        :class="{ active: tab === 'films' }"
+        @click="tab = 'films'"
+      >
+        Films
       </button>
-    </form>
-
-    <form class="form" @submit="onSubmit">
-      <h2>Upload film / episode</h2>
-      <label>
-        Name
-        <input v-model="name" type="text" required maxlength="200" placeholder="Film or episode title" />
-      </label>
-      <label>
-        Description
-        <textarea
-          v-model="description"
-          rows="3"
-          maxlength="2000"
-          placeholder="Log entry / synopsis"
-        />
-      </label>
-      <label>
-        Series (optional)
-        <select v-model="seriesId">
-          <option value="">Standalone — no series</option>
-          <option v-for="s in seriesList" :key="s.id" :value="s.id">
-            {{ s.name }} ({{ s.entry_count }})
-          </option>
-        </select>
-      </label>
-      <div v-if="inSeries" class="row3">
-        <label>
-          Season
-          <input v-model="season" type="number" min="1" placeholder="e.g. 1" />
-        </label>
-        <label>
-          Episode
-          <input v-model="episode" type="number" min="1" placeholder="e.g. 12" />
-        </label>
-        <label>
-          Sort / part
-          <input v-model="sortOrder" type="number" placeholder="1 for Part One" />
-        </label>
-      </div>
-      <p v-if="inSeries" class="hint">
-        Movies in a franchise: leave season/episode empty and use sort (1, 2…). Anime/TV: set season
-        + episode.
-      </p>
-      <div class="files">
-        <label>
-          Video file
-          <input type="file" accept="video/*" required @change="onVideoChange" />
-        </label>
-        <label>
-          Poster image
-          <input type="file" accept="image/*" required @change="onPosterChange" />
-        </label>
-      </div>
-      <button class="submit" type="submit" :disabled="submitting">
-        {{ submitting ? 'Loading cargo…' : 'Stow aboard' }}
+      <button
+        type="button"
+        class="tab"
+        :class="{ active: tab === 'series' }"
+        @click="tab = 'series'"
+      >
+        Series
       </button>
-    </form>
+    </nav>
 
     <p v-if="success" class="banner ok">{{ success }}</p>
     <p v-if="error" class="banner err">{{ error }}</p>
 
-    <div class="inventory">
-      <h2>Series</h2>
-      <div v-if="loading" class="state">Counting barrels…</div>
-      <ul v-else-if="seriesList.length" class="list">
-        <li v-for="s in seriesList" :key="s.id">
-          <img v-if="s.poster_url" :src="s.poster_url" :alt="s.name" />
-          <div v-else class="thumb-fallback">☀</div>
-          <div>
-            <strong>{{ s.name }}</strong>
-            <p>{{ s.kind }} · {{ s.entry_count }} entries</p>
-          </div>
-          <div class="actions">
-            <RouterLink :to="{ name: 'series', params: { id: s.id } }">Open</RouterLink>
-            <button type="button" class="danger" @click="removeSeries(s.id, s.name)">Delete</button>
-          </div>
-        </li>
-      </ul>
-      <div v-else class="state">No series charted yet.</div>
+    <div v-show="tab === 'films'" class="panel">
+      <form class="form" @submit="onSubmit">
+        <h2>Upload film / episode</h2>
+        <label>
+          Name
+          <input
+            v-model="name"
+            type="text"
+            required
+            maxlength="200"
+            placeholder="Film or episode title"
+          />
+        </label>
+        <label>
+          Description
+          <textarea
+            v-model="description"
+            rows="3"
+            maxlength="2000"
+            placeholder="Log entry / synopsis"
+          />
+        </label>
+        <label>
+          Series (optional)
+          <select v-model="seriesId">
+            <option value="">Standalone — no series</option>
+            <option v-for="s in seriesList" :key="s.id" :value="s.id">
+              {{ s.name }} ({{ s.entry_count }})
+            </option>
+          </select>
+        </label>
+        <div v-if="inSeries" class="row3">
+          <label>
+            Season
+            <input v-model="season" type="number" min="1" placeholder="e.g. 1" />
+          </label>
+          <label>
+            Episode
+            <input v-model="episode" type="number" min="1" placeholder="e.g. 12" />
+          </label>
+          <label>
+            Sort / part
+            <input v-model="sortOrder" type="number" placeholder="1 for Part One" />
+          </label>
+        </div>
+        <p v-if="inSeries" class="hint">
+          Movies in a franchise: leave season/episode empty and use sort (1, 2…). Anime/TV: set
+          season + episode.
+        </p>
+        <div class="files">
+          <label>
+            Video file
+            <input type="file" accept="video/*" required @change="onVideoChange" />
+          </label>
+          <label>
+            Poster image
+            <input type="file" accept="image/*" required @change="onPosterChange" />
+            <span class="field-note">Converted to WebP on upload</span>
+          </label>
+        </div>
+        <button class="submit" type="submit" :disabled="submitting">
+          {{ submitting ? 'Loading cargo…' : 'Stow aboard' }}
+        </button>
+      </form>
+
+      <div class="inventory">
+        <h2>All films</h2>
+        <div v-if="loading" class="state">Counting barrels…</div>
+        <ul v-else-if="films.length" class="list">
+          <li v-for="film in films" :key="film.id">
+            <img :src="film.poster_url" :alt="film.name" />
+            <div>
+              <strong>{{ film.name }}</strong>
+              <p>
+                <span class="status-pill" :class="film.playback_status || 'ready'">{{
+                  film.playback_status || 'ready'
+                }}</span>
+                {{ filmMeta(film) || film.description || '—' }}
+              </p>
+            </div>
+            <div class="actions">
+              <RouterLink :to="{ name: 'watch', params: { id: film.id } }">Watch</RouterLink>
+              <button type="button" class="danger" @click="removeFilm(film.id, film.name)">
+                Delete
+              </button>
+            </div>
+          </li>
+        </ul>
+        <div v-else class="state">Hold is empty.</div>
+      </div>
     </div>
 
-    <div class="inventory">
-      <h2>All films</h2>
-      <ul v-if="!loading && films.length" class="list">
-        <li v-for="film in films" :key="film.id">
-          <img :src="film.poster_url" :alt="film.name" />
-          <div>
-            <strong>{{ film.name }}</strong>
-            <p>
-              <span class="status-pill" :class="film.playback_status || 'ready'">{{
-                film.playback_status || 'ready'
-              }}</span>
-              {{ filmMeta(film) || film.description || '—' }}
-            </p>
-          </div>
-          <div class="actions">
-            <RouterLink :to="{ name: 'watch', params: { id: film.id } }">Watch</RouterLink>
-            <button type="button" class="danger" @click="removeFilm(film.id, film.name)">
-              Delete
-            </button>
-          </div>
-        </li>
-      </ul>
-      <div v-else-if="!loading" class="state">Hold is empty.</div>
+    <div v-show="tab === 'series'" class="panel">
+      <form class="form" @submit="onCreateSeries">
+        <h2>New series</h2>
+        <label>
+          Series name
+          <input
+            v-model="seriesName"
+            type="text"
+            required
+            maxlength="200"
+            placeholder="e.g. Bleach"
+          />
+        </label>
+        <label>
+          Description
+          <textarea
+            v-model="seriesDescription"
+            rows="2"
+            maxlength="2000"
+            placeholder="Optional series synopsis"
+          />
+        </label>
+        <div class="row2">
+          <label>
+            Kind
+            <select v-model="seriesKind">
+              <option value="franchise">Franchise (movies)</option>
+              <option value="anime">Anime</option>
+              <option value="tv">TV show</option>
+            </select>
+          </label>
+          <label>
+            Cover poster (optional)
+            <input type="file" accept="image/*" @change="onSeriesPosterChange" />
+            <span class="field-note">Converted to WebP on upload</span>
+          </label>
+        </div>
+        <button class="submit" type="submit" :disabled="seriesSubmitting">
+          {{ seriesSubmitting ? 'Charting…' : 'Create series' }}
+        </button>
+      </form>
+
+      <div class="inventory">
+        <h2>Series</h2>
+        <div v-if="loading" class="state">Counting barrels…</div>
+        <ul v-else-if="seriesList.length" class="list">
+          <li v-for="s in seriesList" :key="s.id">
+            <img v-if="s.poster_url" :src="s.poster_url" :alt="s.name" />
+            <div v-else class="thumb-fallback">☀</div>
+            <div>
+              <strong>{{ s.name }}</strong>
+              <p>{{ s.kind }} · {{ s.entry_count }} entries</p>
+            </div>
+            <div class="actions">
+              <RouterLink :to="{ name: 'series', params: { id: s.id } }">Open</RouterLink>
+              <button type="button" class="danger" @click="removeSeries(s.id, s.name)">
+                Delete
+              </button>
+            </div>
+          </li>
+        </ul>
+        <div v-else class="state">No series charted yet.</div>
+      </div>
     </div>
   </section>
 </template>
@@ -330,7 +371,7 @@ function filmMeta(film) {
 
 .intro {
   max-width: 40rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .eyebrow {
@@ -360,6 +401,32 @@ function filmMeta(film) {
   font-weight: 800;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.tab {
+  padding: 0.55rem 1.15rem;
+  border: 2px solid color-mix(in srgb, var(--wood-brown) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cream-sail) 85%, transparent);
+  color: var(--wood-brown);
+  font-weight: 800;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.tab:hover {
+  border-color: var(--ship-orange);
+}
+
+.tab.active {
+  background: var(--ship-orange);
+  border-color: var(--ship-orange);
+  color: var(--cream-sail);
 }
 
 .status-pill {
@@ -412,6 +479,12 @@ label {
   gap: 0.4rem;
   font-weight: 700;
   color: var(--wood-brown);
+}
+
+.field-note {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--sea-teal);
 }
 
 input,

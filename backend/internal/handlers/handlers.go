@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/spread/thousand_sunny/internal/imageconv"
 	"github.com/spread/thousand_sunny/internal/models"
 	"github.com/spread/thousand_sunny/internal/store"
 	"github.com/spread/thousand_sunny/internal/transcode"
@@ -121,17 +122,12 @@ func (a *API) CreateSeries(w http.ResponseWriter, r *http.Request) {
 
 	id := uuid.New()
 	var posterRel *string
-	posterFile, posterHeader, err := r.FormFile("poster")
+	posterFile, _, err := r.FormFile("poster")
 	if err == nil {
 		defer posterFile.Close()
-		posterExt := extOr(posterHeader.Filename, ".jpg")
-		rel := filepath.Join("series_posters", id.String()+posterExt)
+		rel := filepath.Join("series_posters", id.String()+".webp")
 		abs := filepath.Join(a.MediaRoot, rel)
-		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to prepare storage")
-			return
-		}
-		if err := saveUpload(posterFile, abs); err != nil {
+		if err := saveImageAsWebP(posterFile, abs); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to save poster")
 			return
 		}
@@ -198,7 +194,11 @@ func (a *API) ServeSeriesPoster(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to get poster")
 		return
 	}
-	http.ServeFile(w, r, filepath.Join(a.MediaRoot, rel))
+	path := filepath.Join(a.MediaRoot, rel)
+	if strings.HasSuffix(strings.ToLower(path), ".webp") {
+		w.Header().Set("Content-Type", "image/webp")
+	}
+	http.ServeFile(w, r, path)
 }
 
 func (a *API) ListAnimations(w http.ResponseWriter, r *http.Request) {
@@ -288,7 +288,7 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 	}
 	defer videoFile.Close()
 
-	posterFile, posterHeader, err := r.FormFile("poster")
+	posterFile, _, err := r.FormFile("poster")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "poster file is required")
 		return
@@ -297,9 +297,8 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 
 	id := uuid.New()
 	videoExt := extOr(videoHeader.Filename, ".mp4")
-	posterExt := extOr(posterHeader.Filename, ".jpg")
 	videoRel := filepath.Join("videos", id.String()+videoExt)
-	posterRel := filepath.Join("posters", id.String()+posterExt)
+	posterRel := filepath.Join("posters", id.String()+".webp")
 	videoAbs := filepath.Join(a.MediaRoot, videoRel)
 	posterAbs := filepath.Join(a.MediaRoot, posterRel)
 
@@ -316,7 +315,7 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to save video")
 		return
 	}
-	if err := saveUpload(posterFile, posterAbs); err != nil {
+	if err := saveImageAsWebP(posterFile, posterAbs); err != nil {
 		_ = os.Remove(videoAbs)
 		writeError(w, http.StatusInternalServerError, "failed to save poster")
 		return
@@ -479,6 +478,9 @@ func (a *API) ServePoster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := filepath.Join(a.MediaRoot, item.PosterPath)
+	if strings.HasSuffix(strings.ToLower(path), ".webp") {
+		w.Header().Set("Content-Type", "image/webp")
+	}
 	http.ServeFile(w, r, path)
 }
 
@@ -554,6 +556,18 @@ func saveUpload(src io.Reader, dest string) error {
 		return closeErr
 	}
 	return os.Rename(tmp, dest)
+}
+
+func saveImageAsWebP(src io.Reader, destWebP string) error {
+	if err := os.MkdirAll(filepath.Dir(destWebP), 0o755); err != nil {
+		return err
+	}
+	rawTmp := destWebP + ".src.tmp"
+	if err := saveUpload(src, rawTmp); err != nil {
+		return err
+	}
+	defer os.Remove(rawTmp)
+	return imageconv.SaveUploadAsWebP(rawTmp, destWebP)
 }
 
 func extOr(filename, fallback string) string {
