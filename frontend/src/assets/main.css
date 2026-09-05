@@ -1,0 +1,97 @@
+:root {
+  --sunny-yellow: #f5c518;
+  --ship-orange: #e85d04;
+  --wood-brown: #5c3a21;
+  --sea-teal: #0a7a7a;
+  --cream-sail: #fff8e7;
+  --ink: #2a1a10;
+  --foam: rgba(255, 248, 231, 0.92);
+  --shadow: rgba(42, 26, 16, 0.18);
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Nunito', system-ui, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--ink);
+  background:
+    radial-gradient(ellipse 120% 80% at 10% -10%, rgba(245, 197, 24, 0.35), transparent 55%),
+    radial-gradient(ellipse 90% 70% at 100% 0%, rgba(10, 122, 122, 0.28), transparent 50%),
+    linear-gradient(180deg, #c8e8e4 0%, #7eb8b4 38%, #3d8f8a 70%, #246866 100%);
+  background-attachment: fixed;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  background-image: repeating-linear-gradient(
+    95deg,
+    transparent,
+    transparent 18px,
+    rgba(92, 58, 33, 0.35) 18px,
+    rgba(92, 58, 33, 0.35) 19px
+  );
+  z-index: 0;
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+@keyframes fadeRise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes softPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}

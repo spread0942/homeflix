@@ -1,0 +1,79 @@
+services:
+  traefik:
+    image: traefik:v3.6
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=sunny
+      - --entrypoints.web.address=:80
+      - --api.dashboard=false
+    environment:
+      DOCKER_API_VERSION: "1.44"
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - sunny
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.frontend.rule=PathPrefix(`/`)
+      - traefik.http.routers.frontend.entrypoints=web
+      - traefik.http.routers.frontend.priority=1
+      - traefik.http.services.frontend.loadbalancer.server.port=80
+    networks:
+      - sunny
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgres://sunny:sunny@postgres:5432/thousand_sunny?sslmode=disable
+      MEDIA_ROOT: /data
+      PORT: "8080"
+    volumes:
+      - media_data:/data
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.backend.rule=PathPrefix(`/api`)
+      - traefik.http.routers.backend.entrypoints=web
+      - traefik.http.routers.backend.priority=100
+      - traefik.http.services.backend.loadbalancer.server.port=8080
+    networks:
+      - sunny
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sunny
+      POSTGRES_PASSWORD: sunny
+      POSTGRES_DB: thousand_sunny
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - sunny
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sunny -d thousand_sunny"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+networks:
+  sunny:
+    name: sunny
+    driver: bridge
+
+volumes:
+  pg_data:
+  media_data:
