@@ -26,6 +26,7 @@ func main() {
 	for _, dir := range []string{
 		filepath.Join(cfg.MediaRoot, "videos"),
 		filepath.Join(cfg.MediaRoot, "posters"),
+		filepath.Join(cfg.MediaRoot, "series_posters"),
 	} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			log.Fatalf("create media dir: %v", err)

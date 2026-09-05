@@ -10,6 +10,31 @@ async function request(path, options = {}) {
   return data
 }
 
+export function listLibrary(q = '') {
+  const query = q ? `?q=${encodeURIComponent(q)}` : ''
+  return request(`/library${query}`)
+}
+
+export function listSeries(q = '') {
+  const query = q ? `?q=${encodeURIComponent(q)}` : ''
+  return request(`/series${query}`)
+}
+
+export function getSeries(id) {
+  return request(`/series/${id}`)
+}
+
+export function createSeries(formData) {
+  return request('/series', {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export function deleteSeries(id) {
+  return request(`/series/${id}`, { method: 'DELETE' })
+}
+
 export function listAnimations(q = '') {
   const query = q ? `?q=${encodeURIComponent(q)}` : ''
   return request(`/animations${query}`)

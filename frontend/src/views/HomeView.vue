@@ -1,11 +1,11 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { listAnimations } from '../api'
+import { listLibrary } from '../api'
 
 const router = useRouter()
 const query = ref('')
-const films = ref([])
+const items = ref([])
 const loading = ref(true)
 const error = ref('')
 let debounceTimer
@@ -14,10 +14,10 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    films.value = await listAnimations(query.value)
+    items.value = await listLibrary(query.value)
   } catch (e) {
     error.value = e.message
-    films.value = []
+    items.value = []
   } finally {
     loading.value = false
   }
@@ -32,8 +32,21 @@ watch(
   { immediate: true },
 )
 
-function openFilm(id) {
-  router.push({ name: 'watch', params: { id } })
+function openItem(item) {
+  if (item.type === 'series') {
+    router.push({ name: 'series', params: { id: item.id } })
+  } else {
+    router.push({ name: 'watch', params: { id: item.id } })
+  }
+}
+
+function subtitle(item) {
+  if (item.type === 'series') {
+    const n = item.entry_count || 0
+    const kind = item.kind === 'anime' ? 'anime' : item.kind === 'tv' ? 'show' : 'franchise'
+    return `${n} ${n === 1 ? 'entry' : 'entries'} · ${kind}`
+  }
+  return item.description || 'Standalone film'
 }
 </script>
 
@@ -48,7 +61,7 @@ function openFilm(id) {
         <input
           v-model="query"
           type="search"
-          placeholder="Log Pose: search by name or description…"
+          placeholder="Log Pose: search series, films, or descriptions…"
           autocomplete="off"
         />
       </label>
@@ -57,18 +70,25 @@ function openFilm(id) {
     <div class="library">
       <div v-if="loading" class="state">Scanning the sea charts…</div>
       <div v-else-if="error" class="state error">{{ error }}</div>
-      <div v-else-if="!films.length" class="state">
+      <div v-else-if="!items.length" class="state">
         No films aboard yet. Head to <RouterLink to="/admin">Galley-La</RouterLink> to load cargo.
       </div>
       <ul v-else class="grid">
-        <li v-for="film in films" :key="film.id">
-          <button class="card" type="button" @click="openFilm(film.id)">
+        <li v-for="item in items" :key="`${item.type}-${item.id}`">
+          <button class="card" type="button" @click="openItem(item)">
             <div class="poster-wrap">
-              <img :src="film.poster_url" :alt="film.name" loading="lazy" />
+              <img
+                v-if="item.poster_url"
+                :src="item.poster_url"
+                :alt="item.name"
+                loading="lazy"
+              />
+              <div v-else class="poster-fallback" aria-hidden="true">☀</div>
+              <span v-if="item.type === 'series'" class="badge">Series</span>
             </div>
             <div class="meta">
-              <h2>{{ film.name }}</h2>
-              <p>{{ film.description || 'No log entry yet.' }}</p>
+              <h2>{{ item.name }}</h2>
+              <p>{{ subtitle(item) }}</p>
             </div>
           </button>
         </li>
@@ -176,6 +196,7 @@ function openFilm(id) {
 }
 
 .poster-wrap {
+  position: relative;
   aspect-ratio: 2 / 3;
   overflow: hidden;
   border-radius: 0.85rem;
@@ -191,8 +212,32 @@ function openFilm(id) {
   transition: transform 0.35s ease;
 }
 
+.poster-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 3rem;
+  background: linear-gradient(160deg, var(--sunny-yellow), var(--sea-teal));
+  color: var(--wood-brown);
+}
+
 .card:hover .poster-wrap img {
   transform: scale(1.05);
+}
+
+.badge {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--ship-orange);
+  color: var(--cream-sail);
 }
 
 .meta {

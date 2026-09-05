@@ -5,9 +5,9 @@ Personal Netflix-style film streaming with a One Piece / Thousand Sunny theme. N
 ## Stack
 
 - **Traefik** — reverse proxy on port 80 (`v3.6`, Docker API compatible with modern daemons)
-- **Vue 3** frontend — library, search, player, admin upload
+- **Vue 3** frontend — library, series, search, player, admin upload
 - **Go** API — Postgres metadata + file upload/stream
-- **Postgres 16** — `animations` table
+- **Postgres 16** — `series` + `animations` tables
 
 ## Quick start
 
@@ -17,9 +17,17 @@ docker compose up --build
 
 Open [http://localhost](http://localhost).
 
-- **Home** — browse and search films
+- **Home** — series cards + standalone films (search both)
+- **Series** — seasons / parts list for a franchise or show
 - **Watch** — HTML5 player with range seeking
-- **Galley-La (`/admin`)** — upload name, description, video, and poster
+- **Galley-La (`/admin`)** — create series, upload films with season/episode/sort
+
+## Grouping films
+
+1. Create a **series** (e.g. Dune, Bleach) with kind `franchise`, `anime`, or `tv`.
+2. Upload each film/episode and assign it to that series.
+3. Use **sort / part** for movie trilogies (Part 1, Part 2).
+4. Use **season + episode** for TV/anime.
 
 ## Environment (backend)
 
@@ -44,11 +52,17 @@ Vite proxies `/api` to `http://localhost:8080`.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/animations?q=` | List / search |
+| `GET` | `/api/library?q=` | Home grid: series + standalone films |
+| `GET` | `/api/series?q=` | List series |
+| `GET` | `/api/series/{id}` | Series + ordered entries |
+| `GET` | `/api/series/{id}/poster` | Series cover (or first entry) |
+| `POST` | `/api/series` | Multipart: `name`, `description`, `kind`, optional `poster` |
+| `DELETE` | `/api/series/{id}` | Delete series + all entries/files |
+| `GET` | `/api/animations?q=` | List / search all films |
 | `GET` | `/api/animations/{id}` | Metadata |
 | `GET` | `/api/animations/{id}/poster` | Poster image |
 | `GET` | `/api/animations/{id}/stream` | Video (byte-range) |
-| `POST` | `/api/animations` | Multipart upload (`name`, `description`, `video`, `poster`) |
+| `POST` | `/api/animations` | Multipart: `name`, `description`, `video`, `poster`, optional `series_id`, `season`, `episode`, `sort_order` |
 | `DELETE` | `/api/animations/{id}` | Delete row + files |
 | `GET` | `/api/health` | Health check |
 

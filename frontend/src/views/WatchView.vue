@@ -47,8 +47,29 @@ watch(() => props.id, load)
       <div class="details">
         <p class="eyebrow">Now sailing</p>
         <h1>{{ film.name }}</h1>
+        <p v-if="film.series_name" class="series-line">
+          <RouterLink
+            v-if="film.series_id"
+            class="series-link"
+            :to="{ name: 'series', params: { id: film.series_id } }"
+          >
+            {{ film.series_name }}
+          </RouterLink>
+          <span v-if="film.season != null || film.episode != null">
+            ·
+            <template v-if="film.season != null">S{{ film.season }}</template>
+            <template v-if="film.episode != null">E{{ film.episode }}</template>
+          </span>
+        </p>
         <p class="desc">{{ film.description || 'No description logged.' }}</p>
-        <RouterLink class="back" to="/">← Back to the Sunny library</RouterLink>
+        <RouterLink
+          v-if="film.series_id"
+          class="back"
+          :to="{ name: 'series', params: { id: film.series_id } }"
+        >
+          ← Back to {{ film.series_name }}
+        </RouterLink>
+        <RouterLink v-else class="back" to="/">← Back to the Sunny library</RouterLink>
       </div>
     </template>
   </section>
@@ -103,6 +124,18 @@ video {
 .desc {
   margin: 0 0 1rem;
   line-height: 1.55;
+}
+
+.series-line {
+  margin: 0 0 0.75rem;
+  font-weight: 700;
+  color: var(--sea-teal);
+}
+
+.series-link {
+  color: var(--sea-teal);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .back {

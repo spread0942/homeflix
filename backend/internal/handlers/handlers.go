@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -26,16 +27,171 @@ type API struct {
 
 func (a *API) Routes() chi.Router {
 	r := chi.NewRouter()
+
+	r.Get("/library", a.Library)
+
+	r.Get("/series", a.ListSeries)
+	r.Post("/series", a.CreateSeries)
+	r.Get("/series/{id}", a.GetSeries)
+	r.Delete("/series/{id}", a.DeleteSeries)
+	r.Get("/series/{id}/poster", a.ServeSeriesPoster)
+
 	r.Get("/animations", a.ListAnimations)
 	r.Post("/animations", a.CreateAnimation)
 	r.Get("/animations/{id}", a.GetAnimation)
 	r.Delete("/animations/{id}", a.DeleteAnimation)
 	r.Get("/animations/{id}/poster", a.ServePoster)
 	r.Get("/animations/{id}/stream", a.StreamVideo)
+
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	return r
+}
+
+func (a *API) Library(w http.ResponseWriter, r *http.Request) {
+	items, err := a.Store.Library(r.Context(), r.URL.Query().Get("q"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load library")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (a *API) ListSeries(w http.ResponseWriter, r *http.Request) {
+	items, err := a.Store.ListSeries(r.Context(), r.URL.Query().Get("q"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list series")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (a *API) GetSeries(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	item, err := a.Store.GetSeries(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get series")
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (a *API) CreateSeries(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		// also allow JSON/simple form without files
+		if err2 := r.ParseForm(); err2 != nil {
+			writeError(w, http.StatusBadRequest, "invalid form")
+			return
+		}
+	}
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	description := strings.TrimSpace(r.FormValue("description"))
+	kind := strings.TrimSpace(r.FormValue("kind"))
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	if kind == "" {
+		kind = "franchise"
+	}
+	switch kind {
+	case "franchise", "tv", "anime":
+	default:
+		writeError(w, http.StatusBadRequest, "kind must be franchise, tv, or anime")
+		return
+	}
+
+	id := uuid.New()
+	var posterRel *string
+	posterFile, posterHeader, err := r.FormFile("poster")
+	if err == nil {
+		defer posterFile.Close()
+		posterExt := extOr(posterHeader.Filename, ".jpg")
+		rel := filepath.Join("series_posters", id.String()+posterExt)
+		abs := filepath.Join(a.MediaRoot, rel)
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to prepare storage")
+			return
+		}
+		if err := saveUpload(posterFile, abs); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to save poster")
+			return
+		}
+		posterRel = &rel
+	}
+
+	ser := &models.Series{
+		ID:          id,
+		Name:        name,
+		Description: description,
+		PosterPath:  posterRel,
+		Kind:        kind,
+	}
+	if err := a.Store.CreateSeries(r.Context(), ser); err != nil {
+		if posterRel != nil {
+			_ = os.Remove(filepath.Join(a.MediaRoot, *posterRel))
+		}
+		writeError(w, http.StatusInternalServerError, "failed to save series")
+		return
+	}
+	ser.WithPosterURL()
+	ser.EntryCount = 0
+	ser.Entries = []models.Animation{}
+	writeJSON(w, http.StatusCreated, ser)
+}
+
+func (a *API) DeleteSeries(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	ser, entries, err := a.Store.DeleteSeries(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to delete series")
+		return
+	}
+	for _, e := range entries {
+		_ = os.Remove(filepath.Join(a.MediaRoot, e.VideoPath))
+		_ = os.Remove(filepath.Join(a.MediaRoot, e.PosterPath))
+	}
+	if ser.PosterPath != nil && *ser.PosterPath != "" {
+		_ = os.Remove(filepath.Join(a.MediaRoot, *ser.PosterPath))
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) ServeSeriesPoster(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	rel, err := a.Store.SeriesPosterFile(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get poster")
+		return
+	}
+	http.ServeFile(w, r, filepath.Join(a.MediaRoot, rel))
 }
 
 func (a *API) ListAnimations(w http.ResponseWriter, r *http.Request) {
@@ -78,6 +234,44 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
+	}
+
+	var seriesID *uuid.UUID
+	if raw := strings.TrimSpace(r.FormValue("series_id")); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid series_id")
+			return
+		}
+		if _, err := a.Store.GetSeries(r.Context(), id); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeError(w, http.StatusBadRequest, "series not found")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "failed to validate series")
+			return
+		}
+		seriesID = &id
+	}
+
+	season, err := parseOptionalInt(r.FormValue("season"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid season")
+		return
+	}
+	episode, err := parseOptionalInt(r.FormValue("episode"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid episode")
+		return
+	}
+	sortOrder := 0
+	if raw := strings.TrimSpace(r.FormValue("sort_order")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid sort_order")
+			return
+		}
+		sortOrder = n
 	}
 
 	videoFile, videoHeader, err := r.FormFile("video")
@@ -133,6 +327,10 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 		VideoPath:   videoRel,
 		PosterPath:  posterRel,
 		ContentType: contentType,
+		SeriesID:    seriesID,
+		Season:      season,
+		Episode:     episode,
+		SortOrder:   sortOrder,
 	}
 	if err := a.Store.Create(r.Context(), anim); err != nil {
 		_ = os.Remove(videoAbs)
@@ -140,7 +338,12 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to save animation")
 		return
 	}
-	anim.WithURLs()
+	// reload for series_name
+	if full, err := a.Store.Get(r.Context(), anim.ID); err == nil {
+		anim = full
+	} else {
+		anim.WithURLs()
+	}
 	writeJSON(w, http.StatusCreated, anim)
 }
 
@@ -216,6 +419,18 @@ func (a *API) StreamVideo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", item.ContentType)
 	w.Header().Set("Accept-Ranges", "bytes")
 	http.ServeContent(w, r, item.Name+filepath.Ext(item.VideoPath), stat.ModTime(), f)
+}
+
+func parseOptionalInt(raw string) (*int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &n, nil
 }
 
 func saveUpload(src io.Reader, dest string) error {
