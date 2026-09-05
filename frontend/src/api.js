@@ -54,3 +54,7 @@ export function createAnimation(formData) {
     body: formData,
   })
 }
+
+export function transcodeAnimation(id) {
+  return request(`/animations/${id}/transcode`, { method: 'POST' })
+}

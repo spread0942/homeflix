@@ -20,6 +20,7 @@ Open [http://localhost](http://localhost).
 - **Home** — series cards + standalone films (search both)
 - **Series** — seasons / parts list for a franchise or show
 - **Watch** — HTML5 player with range seeking
+- **Workshop (`/conversions`)** — live conversion queue (processing / ready / failed)
 - **Galley-La (`/admin`)** — create series, upload films with season/episode/sort
 
 ## Grouping films

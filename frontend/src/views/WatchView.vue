@@ -66,10 +66,12 @@ onUnmounted(() => clearInterval(pollTimer))
     <template v-else-if="film">
       <div v-if="film.playback_status === 'processing'" class="banner">
         Converting to browser-friendly MP4 (H.264). Large films can take a while — this page will
-        unlock when ready.
+        unlock when ready. Track all jobs in
+        <RouterLink to="/conversions">Den Den Workshop</RouterLink>.
       </div>
       <div v-else-if="film.playback_status === 'failed'" class="banner err">
-        Conversion failed. Re-upload an H.264 MP4, or ask Galley-La to retry transcode.
+        Conversion failed. Retry from
+        <RouterLink to="/conversions">Den Den Workshop</RouterLink>, or re-upload an H.264 MP4.
       </div>
       <div class="player-shell">
         <video

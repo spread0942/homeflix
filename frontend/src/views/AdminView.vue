@@ -176,7 +176,8 @@ function filmMeta(film) {
       <p>
         Chart a series (Dune, Bleach, …), then stow films with season / episode / part order.
         <strong>Firefox needs H.264 + AAC in MP4</strong> — MKV/HEVC uploads are auto-converted in the
-        background.
+        background. Track progress in
+        <RouterLink class="inline-link" to="/conversions">Den Den Workshop</RouterLink>.
       </p>
     </header>
 
@@ -301,7 +302,12 @@ function filmMeta(film) {
           <img :src="film.poster_url" :alt="film.name" />
           <div>
             <strong>{{ film.name }}</strong>
-            <p>{{ filmMeta(film) || film.description || '—' }}</p>
+            <p>
+              <span class="status-pill" :class="film.playback_status || 'ready'">{{
+                film.playback_status || 'ready'
+              }}</span>
+              {{ filmMeta(film) || film.description || '—' }}
+            </p>
           </div>
           <div class="actions">
             <RouterLink :to="{ name: 'watch', params: { id: film.id } }">Watch</RouterLink>
@@ -347,6 +353,40 @@ function filmMeta(film) {
 .intro p {
   margin: 0;
   color: var(--ink);
+}
+
+.inline-link {
+  color: var(--ship-orange);
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.status-pill {
+  display: inline-block;
+  margin-right: 0.35rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+
+.status-pill.ready {
+  background: color-mix(in srgb, var(--sea-teal) 25%, transparent);
+  color: var(--sea-teal);
+}
+
+.status-pill.processing {
+  background: color-mix(in srgb, var(--ship-orange) 30%, transparent);
+  color: var(--ship-orange);
+}
+
+.status-pill.failed {
+  background: #fde8e8;
+  color: #8b1e1e;
 }
 
 .form {

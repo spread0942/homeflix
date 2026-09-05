@@ -1,0 +1,467 @@
+<script setup>
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { deleteAnimation, listAnimations, transcodeAnimation } from '../api'
+
+const films = ref([])
+const loading = ref(true)
+const error = ref('')
+const busyId = ref('')
+let pollTimer
+
+const counts = computed(() => {
+  const c = { ready: 0, processing: 0, failed: 0, other: 0 }
+  for (const f of films.value) {
+    const s = f.playback_status || 'ready'
+    if (s in c) c[s]++
+    else c.other++
+  }
+  return c
+})
+
+const sorted = computed(() => {
+  const rank = { processing: 0, failed: 1, ready: 2 }
+  return [...films.value].sort((a, b) => {
+    const ra = rank[a.playback_status] ?? 3
+    const rb = rank[b.playback_status] ?? 3
+    if (ra !== rb) return ra - rb
+    return new Date(b.created_at) - new Date(a.created_at)
+  })
+})
+
+async function refresh({ quiet = false } = {}) {
+  if (!quiet) loading.value = true
+  try {
+    films.value = await listAnimations()
+    error.value = ''
+  } catch (e) {
+    if (!quiet) error.value = e.message
+  } finally {
+    loading.value = false
+  }
+}
+
+function formatLabel(film) {
+  const ct = film.content_type || ''
+  if (ct.includes('matroska') || ct.includes('x-matroska')) return 'MKV'
+  if (ct.includes('mp4')) return 'MP4'
+  if (ct.includes('webm')) return 'WebM'
+  return ct || 'unknown'
+}
+
+function statusLabel(status) {
+  switch (status) {
+    case 'processing':
+      return 'Converting'
+    case 'failed':
+      return 'Failed'
+    case 'ready':
+      return 'Ready'
+    default:
+      return status || 'Unknown'
+  }
+}
+
+function statusHint(film) {
+  switch (film.playback_status) {
+    case 'processing':
+      return 'ffmpeg is building an H.264/AAC MP4. Large films can take a long time — this list refreshes every few seconds.'
+    case 'failed':
+      return 'Conversion failed. Retry, or re-upload an H.264 MP4.'
+    case 'ready':
+      return formatLabel(film) === 'MP4' ? 'Browser-ready.' : 'Marked ready.'
+    default:
+      return ''
+  }
+}
+
+async function retry(film) {
+  busyId.value = film.id
+  error.value = ''
+  try {
+    await transcodeAnimation(film.id)
+    await refresh({ quiet: true })
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    busyId.value = ''
+  }
+}
+
+async function remove(film) {
+  if (!confirm(`Throw "${film.name}" overboard?`)) return
+  error.value = ''
+  try {
+    await deleteAnimation(film.id)
+    await refresh({ quiet: true })
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+onMounted(() => {
+  refresh()
+  pollTimer = setInterval(() => refresh({ quiet: true }), 4000)
+})
+onUnmounted(() => clearInterval(pollTimer))
+</script>
+
+<template>
+  <section class="conversions">
+    <header class="intro">
+      <p class="eyebrow">Engine room</p>
+      <h1>Den Den Workshop</h1>
+      <p>
+        Live conversion queue for browser playback. Unsupported uploads (MKV, HEVC, …) become H.264
+        MP4 here.
+      </p>
+    </header>
+
+    <div class="stats">
+      <div class="stat processing">
+        <strong>{{ counts.processing }}</strong>
+        <span>Converting</span>
+      </div>
+      <div class="stat ready">
+        <strong>{{ counts.ready }}</strong>
+        <span>Ready</span>
+      </div>
+      <div class="stat failed">
+        <strong>{{ counts.failed }}</strong>
+        <span>Failed</span>
+      </div>
+    </div>
+
+    <p v-if="error" class="banner err">{{ error }}</p>
+    <div v-if="loading && !films.length" class="state">Checking the workshop…</div>
+
+    <ul v-else-if="sorted.length" class="queue">
+      <li v-for="film in sorted" :key="film.id" :class="film.playback_status">
+        <img :src="film.poster_url" :alt="film.name" />
+        <div class="meta">
+          <div class="title-row">
+            <strong>{{ film.name }}</strong>
+            <span class="badge" :class="film.playback_status">{{
+              statusLabel(film.playback_status)
+            }}</span>
+          </div>
+          <p class="sub">
+            <template v-if="film.series_name">{{ film.series_name }} · </template>
+            {{ formatLabel(film) }}
+            <template v-if="film.playback_status === 'processing'"> → MP4</template>
+          </p>
+          <p class="hint">{{ statusHint(film) }}</p>
+          <div v-if="film.playback_status === 'processing'" class="bar" aria-hidden="true">
+            <span class="bar-fill" />
+          </div>
+        </div>
+        <div class="actions">
+          <RouterLink
+            v-if="film.playback_status === 'ready'"
+            :to="{ name: 'watch', params: { id: film.id } }"
+          >
+            Watch
+          </RouterLink>
+          <RouterLink
+            v-else
+            class="ghost"
+            :to="{ name: 'watch', params: { id: film.id } }"
+          >
+            Open
+          </RouterLink>
+          <button
+            v-if="film.playback_status === 'failed' || film.playback_status === 'ready'"
+            type="button"
+            class="retry"
+            :disabled="busyId === film.id"
+            @click="retry(film)"
+          >
+            {{ busyId === film.id ? 'Queuing…' : 'Retry convert' }}
+          </button>
+          <button
+            v-if="film.playback_status === 'processing'"
+            type="button"
+            class="retry"
+            :disabled="busyId === film.id"
+            @click="retry(film)"
+          >
+            {{ busyId === film.id ? 'Queuing…' : 'Re-queue' }}
+          </button>
+          <button type="button" class="danger" @click="remove(film)">Delete</button>
+        </div>
+      </li>
+    </ul>
+    <div v-else class="state">No films in the hold yet. Upload from Galley-La.</div>
+
+    <p class="foot">
+      <RouterLink to="/admin">← Back to Galley-La</RouterLink>
+      · Auto-refreshes every 4s
+    </p>
+  </section>
+</template>
+
+<style scoped>
+.conversions {
+  padding: 0.5rem clamp(1rem, 4vw, 3rem) 3rem;
+  animation: fadeRise 0.55s ease both;
+}
+
+.intro {
+  max-width: 42rem;
+  margin-bottom: 1.5rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--wood-brown);
+}
+
+.intro h1 {
+  margin: 0.35rem 0 0.6rem;
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 6vw, 3.4rem);
+  color: var(--cream-sail);
+  text-shadow: 0 3px 0 color-mix(in srgb, var(--wood-brown) 50%, transparent);
+}
+
+.intro p {
+  margin: 0;
+  color: var(--ink);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  max-width: 36rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat {
+  padding: 0.9rem 1rem;
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--cream-sail) 90%, transparent);
+  border: 2px solid color-mix(in srgb, var(--wood-brown) 22%, transparent);
+}
+
+.stat strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  line-height: 1;
+  color: var(--wood-brown);
+}
+
+.stat span {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.stat.processing strong {
+  color: var(--ship-orange);
+}
+
+.stat.ready strong {
+  color: var(--sea-teal);
+}
+
+.stat.failed strong {
+  color: #8b1e1e;
+}
+
+.banner.err {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 700;
+  background: #fde8e8;
+  color: #8b1e1e;
+  max-width: 40rem;
+}
+
+.queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.queue li {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.85rem;
+  background: color-mix(in srgb, var(--cream-sail) 92%, transparent);
+  border: 2px solid color-mix(in srgb, var(--wood-brown) 25%, transparent);
+  border-radius: 0.95rem;
+}
+
+.queue li.processing {
+  border-color: var(--ship-orange);
+}
+
+.queue li.failed {
+  border-color: #8b1e1e;
+}
+
+.queue img {
+  width: 72px;
+  height: 108px;
+  object-fit: cover;
+  border-radius: 0.45rem;
+  border: 2px solid var(--wood-brown);
+}
+
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.title-row strong {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--wood-brown);
+}
+
+.badge {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.badge.processing {
+  background: var(--ship-orange);
+  color: var(--cream-sail);
+}
+
+.badge.ready {
+  background: var(--sea-teal);
+  color: var(--cream-sail);
+}
+
+.badge.failed {
+  background: #8b1e1e;
+  color: #fff;
+}
+
+.sub,
+.hint {
+  margin: 0.3rem 0 0;
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--ink) 75%, transparent);
+}
+
+.hint {
+  font-weight: 600;
+}
+
+.bar {
+  margin-top: 0.65rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wood-brown) 18%, transparent);
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--sunny-yellow), var(--ship-orange));
+  animation: slide 1.4s ease-in-out infinite;
+}
+
+@keyframes slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 7.5rem;
+}
+
+.actions a,
+.retry,
+.danger {
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-weight: 700;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.actions a {
+  background: var(--sea-teal);
+  color: var(--cream-sail);
+}
+
+.actions a.ghost {
+  background: transparent;
+  color: var(--sea-teal);
+  border: 1px solid var(--sea-teal);
+}
+
+.retry {
+  border: 1px solid var(--ship-orange);
+  background: transparent;
+  color: var(--ship-orange);
+}
+
+.retry:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.danger {
+  background: transparent;
+  color: #8b1e1e;
+  border: 1px solid #8b1e1e;
+}
+
+.state {
+  padding: 1.25rem;
+  background: color-mix(in srgb, var(--cream-sail) 88%, transparent);
+  border-radius: 0.85rem;
+}
+
+.foot {
+  margin-top: 1.5rem;
+  font-weight: 700;
+  color: var(--cream-sail);
+}
+
+.foot a {
+  color: var(--sunny-yellow);
+}
+
+@media (max-width: 700px) {
+  .queue li {
+    grid-template-columns: 56px 1fr;
+  }
+
+  .actions {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+}
+</style>

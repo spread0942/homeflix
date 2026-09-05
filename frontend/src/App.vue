@@ -15,6 +15,7 @@ const isHome = computed(() => route.name === 'home')
       </RouterLink>
       <nav class="nav">
         <RouterLink to="/">Library</RouterLink>
+        <RouterLink to="/conversions">Workshop</RouterLink>
         <RouterLink to="/admin">Galley-La</RouterLink>
       </nav>
     </header>
@@ -75,7 +76,9 @@ const isHome = computed(() => route.name === 'home')
 
 .nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
+  justify-content: flex-end;
 }
 
 .nav a {
