@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { getAnimation } from '../api'
 
 const props = defineProps({
@@ -11,18 +11,28 @@ const loading = ref(true)
 const error = ref('')
 const playError = ref('')
 const videoEl = ref(null)
+const playing = ref(false)
+const overlayVisible = ref(true)
+const seekFlash = ref('') // 'back' | 'fwd' | ''
 let pollTimer
+let hideTimer
+let flashTimer
 
 const SEEK_SECONDS = 10
+
+const playLabel = computed(() => (playing.value ? 'Pause' : 'Play'))
 
 async function load() {
   loading.value = true
   error.value = ''
   playError.value = ''
   film.value = null
+  playing.value = false
   try {
     film.value = await getAnimation(props.id)
     maybePoll()
+    await nextTick()
+    bindVideoEvents()
   } catch (e) {
     error.value = e.message
   } finally {
@@ -39,11 +49,31 @@ function maybePoll() {
         if (film.value.playback_status !== 'processing') {
           clearInterval(pollTimer)
           playError.value = ''
+          await nextTick()
+          bindVideoEvents()
         }
       } catch {
         /* ignore transient poll errors */
       }
     }, 4000)
+  }
+}
+
+function bindVideoEvents() {
+  const v = videoEl.value
+  if (!v) return
+  playing.value = !v.paused
+  v.onplay = () => {
+    playing.value = true
+    scheduleHideOverlay()
+  }
+  v.onpause = () => {
+    playing.value = false
+    showOverlay(true)
+  }
+  v.onended = () => {
+    playing.value = false
+    showOverlay(true)
   }
 }
 
@@ -63,9 +93,31 @@ function isTypingTarget(el) {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
 }
 
+function showOverlay(sticky = false) {
+  overlayVisible.value = true
+  clearTimeout(hideTimer)
+  if (!sticky && playing.value) scheduleHideOverlay()
+}
+
+function scheduleHideOverlay() {
+  clearTimeout(hideTimer)
+  hideTimer = setTimeout(() => {
+    if (playing.value) overlayVisible.value = false
+  }, 2200)
+}
+
+function flashSeek(dir) {
+  seekFlash.value = dir
+  clearTimeout(flashTimer)
+  flashTimer = setTimeout(() => {
+    seekFlash.value = ''
+  }, 450)
+}
+
 async function togglePlay() {
   const v = videoEl.value
   if (!v) return
+  showOverlay()
   if (v.paused) {
     try {
       await v.play()
@@ -81,6 +133,8 @@ function seekBy(delta) {
   const v = videoEl.value
   if (!v || !Number.isFinite(v.duration)) return
   v.currentTime = Math.min(Math.max(0, v.currentTime + delta), v.duration)
+  flashSeek(delta < 0 ? 'back' : 'fwd')
+  showOverlay()
 }
 
 function bumpVolume(delta) {
@@ -153,6 +207,8 @@ onMounted(() => {
 watch(() => props.id, load)
 onUnmounted(() => {
   clearInterval(pollTimer)
+  clearTimeout(hideTimer)
+  clearTimeout(flashTimer)
   window.removeEventListener('keydown', onKeydown)
 })
 </script>
@@ -171,21 +227,61 @@ onUnmounted(() => {
         Conversion failed. Retry from
         <RouterLink to="/conversions">Den Den Workshop</RouterLink>, or re-upload an H.264 MP4.
       </div>
-      <div class="player-shell">
-        <video
-          v-if="film.playback_status === 'ready'"
-          ref="videoEl"
-          :key="film.stream_url + film.playback_status"
-          controls
-          playsinline
-          preload="metadata"
-          :poster="film.poster_url"
-          :src="film.stream_url"
-          @error="onVideoError"
-          @click="togglePlay"
-        >
-          Your browser does not support HTML5 video.
-        </video>
+      <div
+        class="player-shell"
+        @mousemove="showOverlay()"
+        @mouseleave="playing && scheduleHideOverlay()"
+      >
+        <template v-if="film.playback_status === 'ready'">
+          <video
+            ref="videoEl"
+            :key="film.stream_url + film.playback_status"
+            controls
+            playsinline
+            preload="metadata"
+            :poster="film.poster_url"
+            :src="film.stream_url"
+            @error="onVideoError"
+          >
+            Your browser does not support HTML5 video.
+          </video>
+
+          <div class="seek-flash" :class="{ show: seekFlash === 'back', back: true }" aria-hidden="true">
+            −{{ SEEK_SECONDS }}s
+          </div>
+          <div class="seek-flash" :class="{ show: seekFlash === 'fwd', fwd: true }" aria-hidden="true">
+            +{{ SEEK_SECONDS }}s
+          </div>
+
+          <div class="overlay" :class="{ visible: overlayVisible || !playing }">
+            <button
+              type="button"
+              class="ctl"
+              :aria-label="`Rewind ${SEEK_SECONDS} seconds`"
+              @click.stop="seekBy(-SEEK_SECONDS)"
+            >
+              <span class="icon" aria-hidden="true">⟲</span>
+              <span class="ctl-label">{{ SEEK_SECONDS }}</span>
+            </button>
+            <button
+              type="button"
+              class="ctl play"
+              :aria-label="playLabel"
+              @click.stop="togglePlay"
+            >
+              <span class="icon play-icon" aria-hidden="true">{{ playing ? '❚❚' : '▶' }}</span>
+            </button>
+            <button
+              type="button"
+              class="ctl"
+              :aria-label="`Forward ${SEEK_SECONDS} seconds`"
+              @click.stop="seekBy(SEEK_SECONDS)"
+            >
+              <span class="icon" aria-hidden="true">⟳</span>
+              <span class="ctl-label">{{ SEEK_SECONDS }}</span>
+            </button>
+          </div>
+        </template>
         <div v-else class="waiting" :style="{ backgroundImage: `url(${film.poster_url})` }">
           <p v-if="film.playback_status === 'processing'">Preparing the den den projector…</p>
           <p v-else>Playback not ready.</p>
@@ -211,8 +307,8 @@ onUnmounted(() => {
         </p>
         <p class="desc">{{ film.description || 'No description logged.' }}</p>
         <p v-if="film.playback_status === 'ready'" class="shortcuts">
-          <kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> ±10s · <kbd>↑</kbd><kbd>↓</kbd>
-          volume · <kbd>M</kbd> mute · <kbd>F</kbd> fullscreen
+          On video: ←10s · play/pause · +10s · also
+          <kbd>Space</kbd> <kbd>←</kbd><kbd>→</kbd> <kbd>M</kbd> <kbd>F</kbd>
         </p>
         <RouterLink
           v-if="film.series_id"
@@ -248,6 +344,7 @@ onUnmounted(() => {
 }
 
 .player-shell {
+  position: relative;
   border-radius: 1rem;
   overflow: hidden;
   border: 3px solid var(--wood-brown);
@@ -264,10 +361,6 @@ video,
   background: #000;
 }
 
-video {
-  cursor: pointer;
-}
-
 .waiting {
   display: grid;
   place-items: center;
@@ -276,6 +369,96 @@ video {
   color: var(--cream-sail);
   font-weight: 700;
   text-shadow: 0 2px 8px #000;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0 0 3.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.75rem, 3vw, 1.75rem);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.35), transparent 65%);
+}
+
+.overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ctl {
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  gap: 0.1rem;
+  width: clamp(3.2rem, 8vw, 4.2rem);
+  height: clamp(3.2rem, 8vw, 4.2rem);
+  border: 2px solid rgba(255, 248, 231, 0.55);
+  border-radius: 50%;
+  background: rgba(42, 26, 16, 0.72);
+  color: var(--cream-sail);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.ctl:hover,
+.ctl:focus-visible {
+  transform: scale(1.06);
+  background: rgba(232, 93, 4, 0.9);
+  border-color: var(--sunny-yellow);
+  outline: none;
+}
+
+.ctl.play {
+  width: clamp(4rem, 10vw, 5.2rem);
+  height: clamp(4rem, 10vw, 5.2rem);
+  background: rgba(232, 93, 4, 0.88);
+  border-color: var(--sunny-yellow);
+}
+
+.icon {
+  font-size: clamp(1.1rem, 2.5vw, 1.45rem);
+  line-height: 1;
+}
+
+.play-icon {
+  font-size: clamp(1.25rem, 3vw, 1.7rem);
+}
+
+.ctl-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.seek-flash {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%) scale(0.9);
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(42, 26, 16, 0.75);
+  color: var(--sunny-yellow);
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.seek-flash.back {
+  left: 12%;
+}
+
+.seek-flash.fwd {
+  right: 12%;
+}
+
+.seek-flash.show {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
 }
 
 .details {
@@ -353,5 +536,19 @@ video {
 
 .state.error {
   color: #8b1e1e;
+}
+
+.player-shell:fullscreen,
+.player-shell:-webkit-full-screen {
+  border-radius: 0;
+  border: none;
+  max-height: 100vh;
+}
+
+.player-shell:fullscreen video,
+.player-shell:-webkit-full-screen video {
+  max-height: 100vh;
+  height: 100%;
+  object-fit: contain;
 }
 </style>
