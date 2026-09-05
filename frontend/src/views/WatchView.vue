@@ -10,7 +10,10 @@ const film = ref(null)
 const loading = ref(true)
 const error = ref('')
 const playError = ref('')
+const videoEl = ref(null)
 let pollTimer
+
+const SEEK_SECONDS = 10
 
 async function load() {
   loading.value = true
@@ -54,9 +57,104 @@ function onVideoError() {
     'This browser cannot play the file (often MKV or HEVC). Prefer H.264 + AAC in an MP4 container — the Sunny will auto-convert unsupported uploads.'
 }
 
-onMounted(load)
+function isTypingTarget(el) {
+  if (!el || !(el instanceof Element)) return false
+  const tag = el.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
+}
+
+async function togglePlay() {
+  const v = videoEl.value
+  if (!v) return
+  if (v.paused) {
+    try {
+      await v.play()
+    } catch {
+      /* autoplay policies / missing source */
+    }
+  } else {
+    v.pause()
+  }
+}
+
+function seekBy(delta) {
+  const v = videoEl.value
+  if (!v || !Number.isFinite(v.duration)) return
+  v.currentTime = Math.min(Math.max(0, v.currentTime + delta), v.duration)
+}
+
+function bumpVolume(delta) {
+  const v = videoEl.value
+  if (!v) return
+  v.volume = Math.min(1, Math.max(0, v.volume + delta))
+}
+
+async function toggleFullscreen() {
+  const shell = videoEl.value?.closest('.player-shell')
+  if (!shell) return
+  if (document.fullscreenElement) {
+    await document.exitFullscreen().catch(() => {})
+  } else {
+    await shell.requestFullscreen?.().catch(() => {})
+  }
+}
+
+function onKeydown(e) {
+  if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
+  if (isTypingTarget(e.target)) return
+  if (!videoEl.value || film.value?.playback_status !== 'ready') return
+
+  switch (e.key) {
+    case ' ':
+    case 'k':
+    case 'K':
+      e.preventDefault()
+      togglePlay()
+      break
+    case 'ArrowLeft':
+    case 'j':
+    case 'J':
+      e.preventDefault()
+      seekBy(-SEEK_SECONDS)
+      break
+    case 'ArrowRight':
+    case 'l':
+    case 'L':
+      e.preventDefault()
+      seekBy(SEEK_SECONDS)
+      break
+    case 'ArrowUp':
+      e.preventDefault()
+      bumpVolume(0.1)
+      break
+    case 'ArrowDown':
+      e.preventDefault()
+      bumpVolume(-0.1)
+      break
+    case 'm':
+    case 'M':
+      e.preventDefault()
+      videoEl.value.muted = !videoEl.value.muted
+      break
+    case 'f':
+    case 'F':
+      e.preventDefault()
+      toggleFullscreen()
+      break
+    default:
+      break
+  }
+}
+
+onMounted(() => {
+  load()
+  window.addEventListener('keydown', onKeydown)
+})
 watch(() => props.id, load)
-onUnmounted(() => clearInterval(pollTimer))
+onUnmounted(() => {
+  clearInterval(pollTimer)
+  window.removeEventListener('keydown', onKeydown)
+})
 </script>
 
 <template>
@@ -76,6 +174,7 @@ onUnmounted(() => clearInterval(pollTimer))
       <div class="player-shell">
         <video
           v-if="film.playback_status === 'ready'"
+          ref="videoEl"
           :key="film.stream_url + film.playback_status"
           controls
           playsinline
@@ -83,6 +182,7 @@ onUnmounted(() => clearInterval(pollTimer))
           :poster="film.poster_url"
           :src="film.stream_url"
           @error="onVideoError"
+          @click="togglePlay"
         >
           Your browser does not support HTML5 video.
         </video>
@@ -110,6 +210,10 @@ onUnmounted(() => clearInterval(pollTimer))
           </span>
         </p>
         <p class="desc">{{ film.description || 'No description logged.' }}</p>
+        <p v-if="film.playback_status === 'ready'" class="shortcuts">
+          <kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> ±10s · <kbd>↑</kbd><kbd>↓</kbd>
+          volume · <kbd>M</kbd> mute · <kbd>F</kbd> fullscreen
+        </p>
         <RouterLink
           v-if="film.series_id"
           class="back"
@@ -160,6 +264,10 @@ video,
   background: #000;
 }
 
+video {
+  cursor: pointer;
+}
+
 .waiting {
   display: grid;
   place-items: center;
@@ -198,6 +306,26 @@ video,
 .desc {
   margin: 0 0 1rem;
   line-height: 1.55;
+}
+
+.shortcuts {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--ink) 70%, transparent);
+}
+
+.shortcuts kbd {
+  display: inline-block;
+  margin: 0 0.1rem;
+  padding: 0.12rem 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--wood-brown) 35%, transparent);
+  border-bottom-width: 2px;
+  border-radius: 0.35rem;
+  background: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--wood-brown);
 }
 
 .series-line {
