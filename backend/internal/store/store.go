@@ -21,13 +21,13 @@ func New(pool *pgxpool.Pool) *Store {
 }
 
 const animationSelect = `
-	a.id, a.name, a.description, a.video_path, a.poster_path, a.content_type,
+	a.id, a.name, a.description, a.video_path, a.poster_path, a.content_type, a.playback_status,
 	a.series_id, COALESCE(s.name, ''), a.season, a.episode, a.sort_order, a.created_at`
 
 func scanAnimation(row pgx.Row) (*models.Animation, error) {
 	var a models.Animation
 	err := row.Scan(
-		&a.ID, &a.Name, &a.Description, &a.VideoPath, &a.PosterPath, &a.ContentType,
+		&a.ID, &a.Name, &a.Description, &a.VideoPath, &a.PosterPath, &a.ContentType, &a.PlaybackStatus,
 		&a.SeriesID, &a.SeriesName, &a.Season, &a.Episode, &a.SortOrder, &a.CreatedAt,
 	)
 	if err != nil {
@@ -42,7 +42,7 @@ func scanAnimationRows(rows pgx.Rows) ([]models.Animation, error) {
 	for rows.Next() {
 		var a models.Animation
 		if err := rows.Scan(
-			&a.ID, &a.Name, &a.Description, &a.VideoPath, &a.PosterPath, &a.ContentType,
+			&a.ID, &a.Name, &a.Description, &a.VideoPath, &a.PosterPath, &a.ContentType, &a.PlaybackStatus,
 			&a.SeriesID, &a.SeriesName, &a.Season, &a.Episode, &a.SortOrder, &a.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -119,15 +119,64 @@ func (s *Store) Get(ctx context.Context, id uuid.UUID) (*models.Animation, error
 }
 
 func (s *Store) Create(ctx context.Context, a *models.Animation) error {
+	if a.PlaybackStatus == "" {
+		a.PlaybackStatus = "ready"
+	}
 	return s.pool.QueryRow(ctx, `
 		INSERT INTO animations (
-			id, name, description, video_path, poster_path, content_type,
+			id, name, description, video_path, poster_path, content_type, playback_status,
 			series_id, season, episode, sort_order
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING created_at`,
-		a.ID, a.Name, a.Description, a.VideoPath, a.PosterPath, a.ContentType,
+		a.ID, a.Name, a.Description, a.VideoPath, a.PosterPath, a.ContentType, a.PlaybackStatus,
 		a.SeriesID, a.Season, a.Episode, a.SortOrder,
 	).Scan(&a.CreatedAt)
+}
+
+func (s *Store) UpdatePlayback(ctx context.Context, id uuid.UUID, videoPath, contentType, status string) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE animations
+		SET video_path = $2, content_type = $3, playback_status = $4
+		WHERE id = $1`, id, videoPath, contentType, status)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+func (s *Store) SetPlaybackStatus(ctx context.Context, id uuid.UUID, status string) error {
+	tag, err := s.pool.Exec(ctx, `UPDATE animations SET playback_status = $2 WHERE id = $1`, id, status)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+func (s *Store) ListNeedingTranscode(ctx context.Context) ([]models.Animation, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT `+animationSelect+`
+		FROM animations a
+		LEFT JOIN series s ON s.id = a.series_id
+		WHERE a.playback_status IN ('processing', 'failed')
+			OR a.video_path ILIKE '%.mkv'
+			OR a.video_path ILIKE '%.avi'
+			OR a.video_path ILIKE '%.mov'
+			OR a.video_path ILIKE '%.wmv'
+			OR a.video_path ILIKE '%.ts'
+			OR a.video_path ILIKE '%.m2ts'
+			OR a.content_type ILIKE '%matroska%'
+		ORDER BY a.created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanAnimationRows(rows)
 }
 
 func (s *Store) Delete(ctx context.Context, id uuid.UUID) (*models.Animation, error) {

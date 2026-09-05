@@ -174,8 +174,9 @@ function filmMeta(film) {
       <p class="eyebrow">Shipwright desk</p>
       <h1>Galley-La Dock</h1>
       <p>
-        Chart a series (Dune, Bleach, …), then stow films with season / episode / part order. Prefer
-        H.264 MP4.
+        Chart a series (Dune, Bleach, …), then stow films with season / episode / part order.
+        <strong>Firefox needs H.264 + AAC in MP4</strong> — MKV/HEVC uploads are auto-converted in the
+        background.
       </p>
     </header>
 

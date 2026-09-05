@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { getAnimation } from '../api'
 
 const props = defineProps({
@@ -9,13 +9,17 @@ const props = defineProps({
 const film = ref(null)
 const loading = ref(true)
 const error = ref('')
+const playError = ref('')
+let pollTimer
 
 async function load() {
   loading.value = true
   error.value = ''
+  playError.value = ''
   film.value = null
   try {
     film.value = await getAnimation(props.id)
+    maybePoll()
   } catch (e) {
     error.value = e.message
   } finally {
@@ -23,8 +27,36 @@ async function load() {
   }
 }
 
+function maybePoll() {
+  clearInterval(pollTimer)
+  if (film.value?.playback_status === 'processing') {
+    pollTimer = setInterval(async () => {
+      try {
+        film.value = await getAnimation(props.id)
+        if (film.value.playback_status !== 'processing') {
+          clearInterval(pollTimer)
+          playError.value = ''
+        }
+      } catch {
+        /* ignore transient poll errors */
+      }
+    }, 4000)
+  }
+}
+
+function onVideoError() {
+  const status = film.value?.playback_status
+  if (status === 'processing') {
+    playError.value = 'Still converting this file for Firefox/Chrome… hang tight.'
+    return
+  }
+  playError.value =
+    'This browser cannot play the file (often MKV or HEVC). Prefer H.264 + AAC in an MP4 container — the Sunny will auto-convert unsupported uploads.'
+}
+
 onMounted(load)
 watch(() => props.id, load)
+onUnmounted(() => clearInterval(pollTimer))
 </script>
 
 <template>
@@ -32,18 +64,32 @@ watch(() => props.id, load)
     <div v-if="loading" class="state">Opening the den den projector…</div>
     <div v-else-if="error" class="state error">{{ error }}</div>
     <template v-else-if="film">
+      <div v-if="film.playback_status === 'processing'" class="banner">
+        Converting to browser-friendly MP4 (H.264). Large films can take a while — this page will
+        unlock when ready.
+      </div>
+      <div v-else-if="film.playback_status === 'failed'" class="banner err">
+        Conversion failed. Re-upload an H.264 MP4, or ask Galley-La to retry transcode.
+      </div>
       <div class="player-shell">
         <video
-          :key="film.id"
+          v-if="film.playback_status === 'ready'"
+          :key="film.stream_url + film.playback_status"
           controls
           playsinline
           preload="metadata"
           :poster="film.poster_url"
           :src="film.stream_url"
+          @error="onVideoError"
         >
           Your browser does not support HTML5 video.
         </video>
+        <div v-else class="waiting" :style="{ backgroundImage: `url(${film.poster_url})` }">
+          <p v-if="film.playback_status === 'processing'">Preparing the den den projector…</p>
+          <p v-else>Playback not ready.</p>
+        </div>
       </div>
+      <p v-if="playError" class="banner err">{{ playError }}</p>
       <div class="details">
         <p class="eyebrow">Now sailing</p>
         <h1>{{ film.name }}</h1>
@@ -81,6 +127,20 @@ watch(() => props.id, load)
   animation: fadeRise 0.55s ease both;
 }
 
+.banner {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--sea-teal) 18%, var(--cream-sail));
+  color: var(--sea-teal);
+}
+
+.banner.err {
+  background: #fde8e8;
+  color: #8b1e1e;
+}
+
 .player-shell {
   border-radius: 1rem;
   overflow: hidden;
@@ -89,11 +149,23 @@ watch(() => props.id, load)
   box-shadow: 0 16px 40px var(--shadow);
 }
 
-video {
+video,
+.waiting {
   display: block;
   width: 100%;
   max-height: min(70vh, 720px);
+  min-height: 240px;
   background: #000;
+}
+
+.waiting {
+  display: grid;
+  place-items: center;
+  background-size: cover;
+  background-position: center;
+  color: var(--cream-sail);
+  font-weight: 700;
+  text-shadow: 0 2px 8px #000;
 }
 
 .details {

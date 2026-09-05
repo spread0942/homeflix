@@ -9,7 +9,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /out/server ./cmd/server
 
 # Run
 FROM alpine:3.21
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata ffmpeg
 WORKDIR /app
 COPY --from=build /out/server /app/server
 ENV MEDIA_ROOT=/data

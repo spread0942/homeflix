@@ -25,20 +25,21 @@ func (s *Series) WithPosterURL() {
 }
 
 type Animation struct {
-	ID          uuid.UUID  `json:"id"`
-	Name        string     `json:"name"`
-	Description string     `json:"description"`
-	VideoPath   string     `json:"-"`
-	PosterPath  string     `json:"-"`
-	ContentType string     `json:"content_type"`
-	SeriesID    *uuid.UUID `json:"series_id,omitempty"`
-	SeriesName  string     `json:"series_name,omitempty"`
-	Season      *int       `json:"season,omitempty"`
-	Episode     *int       `json:"episode,omitempty"`
-	SortOrder   int        `json:"sort_order"`
-	CreatedAt   time.Time  `json:"created_at"`
-	PosterURL   string     `json:"poster_url"`
-	StreamURL   string     `json:"stream_url"`
+	ID             uuid.UUID  `json:"id"`
+	Name           string     `json:"name"`
+	Description    string     `json:"description"`
+	VideoPath      string     `json:"-"`
+	PosterPath     string     `json:"-"`
+	ContentType    string     `json:"content_type"`
+	PlaybackStatus string     `json:"playback_status"`
+	SeriesID       *uuid.UUID `json:"series_id,omitempty"`
+	SeriesName     string     `json:"series_name,omitempty"`
+	Season         *int       `json:"season,omitempty"`
+	Episode        *int       `json:"episode,omitempty"`
+	SortOrder      int        `json:"sort_order"`
+	CreatedAt      time.Time  `json:"created_at"`
+	PosterURL      string     `json:"poster_url"`
+	StreamURL      string     `json:"stream_url"`
 }
 
 func (a *Animation) WithURLs() {

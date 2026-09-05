@@ -48,6 +48,7 @@ func main() {
 		Store:     store.New(pool),
 		MediaRoot: cfg.MediaRoot,
 	}
+	api.QueuePendingTranscodes()
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)

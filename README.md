@@ -37,7 +37,7 @@ Open [http://localhost](http://localhost).
 | `MEDIA_ROOT` | `/data` | Video + poster storage |
 | `PORT` | `8080` | API listen port |
 
-Media files live in the Docker volume `media_data`. Prefer **H.264 MP4** for browser playback.
+Media files live in the Docker volume `media_data`. **Firefox/Chrome need H.264 video + AAC audio in an MP4** (not MKV/HEVC). Unsupported uploads are auto-converted with ffmpeg in the background (`playback_status`: `processing` → `ready`).
 
 ## Local frontend dev (optional)
 

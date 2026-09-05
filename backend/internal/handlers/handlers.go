@@ -1,14 +1,17 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -16,6 +19,7 @@ import (
 
 	"github.com/spread/thousand_sunny/internal/models"
 	"github.com/spread/thousand_sunny/internal/store"
+	"github.com/spread/thousand_sunny/internal/transcode"
 )
 
 const maxUpload = 4 << 30 // 4 GiB
@@ -23,6 +27,8 @@ const maxUpload = 4 << 30 // 4 GiB
 type API struct {
 	Store     *store.Store
 	MediaRoot string
+
+	transcoding sync.Map // uuid.UUID string -> struct{}
 }
 
 func (a *API) Routes() chi.Router {
@@ -40,6 +46,7 @@ func (a *API) Routes() chi.Router {
 	r.Post("/animations", a.CreateAnimation)
 	r.Get("/animations/{id}", a.GetAnimation)
 	r.Delete("/animations/{id}", a.DeleteAnimation)
+	r.Post("/animations/{id}/transcode", a.TranscodeAnimation)
 	r.Get("/animations/{id}/poster", a.ServePoster)
 	r.Get("/animations/{id}/stream", a.StreamVideo)
 
@@ -320,23 +327,32 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 		contentType = mimeFromExt(videoExt)
 	}
 
+	status := "ready"
+	if transcode.NeedsTranscode(videoExt, contentType) {
+		status = "processing"
+	}
+
 	anim := &models.Animation{
-		ID:          id,
-		Name:        name,
-		Description: description,
-		VideoPath:   videoRel,
-		PosterPath:  posterRel,
-		ContentType: contentType,
-		SeriesID:    seriesID,
-		Season:      season,
-		Episode:     episode,
-		SortOrder:   sortOrder,
+		ID:             id,
+		Name:           name,
+		Description:    description,
+		VideoPath:      videoRel,
+		PosterPath:     posterRel,
+		ContentType:    contentType,
+		PlaybackStatus: status,
+		SeriesID:       seriesID,
+		Season:         season,
+		Episode:        episode,
+		SortOrder:      sortOrder,
 	}
 	if err := a.Store.Create(r.Context(), anim); err != nil {
 		_ = os.Remove(videoAbs)
 		_ = os.Remove(posterAbs)
 		writeError(w, http.StatusInternalServerError, "failed to save animation")
 		return
+	}
+	if status == "processing" {
+		a.StartTranscode(id)
 	}
 	// reload for series_name
 	if full, err := a.Store.Get(r.Context(), anim.ID); err == nil {
@@ -345,6 +361,86 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 		anim.WithURLs()
 	}
 	writeJSON(w, http.StatusCreated, anim)
+}
+
+func (a *API) TranscodeAnimation(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	item, err := a.Store.Get(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get animation")
+		return
+	}
+	if item.PlaybackStatus == "processing" {
+		writeJSON(w, http.StatusAccepted, item)
+		return
+	}
+	if err := a.Store.SetPlaybackStatus(r.Context(), id, "processing"); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to queue transcode")
+		return
+	}
+	a.StartTranscode(id)
+	item.PlaybackStatus = "processing"
+	writeJSON(w, http.StatusAccepted, item)
+}
+
+// StartTranscode converts a stored file to browser-friendly H.264/AAC MP4 in the background.
+func (a *API) StartTranscode(id uuid.UUID) {
+	key := id.String()
+	if _, loaded := a.transcoding.LoadOrStore(key, struct{}{}); loaded {
+		return
+	}
+	go func() {
+		defer a.transcoding.Delete(key)
+		ctx := context.Background()
+		item, err := a.Store.Get(ctx, id)
+		if err != nil {
+			log.Printf("transcode %s: load: %v", id, err)
+			return
+		}
+		src := filepath.Join(a.MediaRoot, item.VideoPath)
+		_ = a.Store.SetPlaybackStatus(ctx, id, "processing")
+		dest, err := transcode.ReplaceWithMP4(src)
+		if err != nil {
+			log.Printf("transcode %s: %v", id, err)
+			_ = a.Store.SetPlaybackStatus(ctx, id, "failed")
+			return
+		}
+		rel, err := filepath.Rel(a.MediaRoot, dest)
+		if err != nil {
+			rel = filepath.Join("videos", filepath.Base(dest))
+		}
+		if err := a.Store.UpdatePlayback(ctx, id, rel, "video/mp4", "ready"); err != nil {
+			log.Printf("transcode %s: update db: %v", id, err)
+			_ = a.Store.SetPlaybackStatus(ctx, id, "failed")
+			return
+		}
+		log.Printf("transcode %s: ready (%s)", id, rel)
+	}()
+}
+
+// QueuePendingTranscodes resumes conversions after restart.
+func (a *API) QueuePendingTranscodes() {
+	items, err := a.Store.ListNeedingTranscode(context.Background())
+	if err != nil {
+		log.Printf("queue transcodes: %v", err)
+		return
+	}
+	for _, item := range items {
+		if item.PlaybackStatus == "ready" && !transcode.NeedsTranscode(filepath.Ext(item.VideoPath), item.ContentType) {
+			continue
+		}
+		log.Printf("queue transcode for %s (%s)", item.ID, item.Name)
+		_ = a.Store.SetPlaybackStatus(context.Background(), item.ID, "processing")
+		a.StartTranscode(item.ID)
+	}
 }
 
 func (a *API) DeleteAnimation(w http.ResponseWriter, r *http.Request) {
@@ -399,6 +495,14 @@ func (a *API) StreamVideo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to get animation")
+		return
+	}
+	if item.PlaybackStatus == "processing" {
+		writeError(w, http.StatusConflict, "video is still being converted for browser playback")
+		return
+	}
+	if item.PlaybackStatus == "failed" {
+		writeError(w, http.StatusUnsupportedMediaType, "conversion failed — re-upload as H.264 MP4 or retry transcode")
 		return
 	}
 
