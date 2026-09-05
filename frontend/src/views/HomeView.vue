@@ -143,7 +143,7 @@ function subtitle(item) {
   border: 2px solid var(--brown);
   border-radius: 999px;
   background: var(--foam);
-  color: var(--ink);
+  color: var(--on-light);
   outline: none;
   box-shadow: 0 8px 24px var(--shadow);
   transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
@@ -164,6 +164,7 @@ function subtitle(item) {
   background: color-mix(in srgb, var(--cream) 88%, transparent);
   border: 2px solid color-mix(in srgb, var(--brown) 30%, transparent);
   border-radius: 1rem;
+  color: var(--on-light);
 }
 
 .state.error {
@@ -219,7 +220,7 @@ function subtitle(item) {
   place-items: center;
   font-size: 3rem;
   background: linear-gradient(160deg, var(--accent-yellow), var(--teal));
-  color: var(--brown);
+  color: var(--cream);
 }
 
 .card:hover .poster-wrap img {

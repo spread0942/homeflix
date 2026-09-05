@@ -244,6 +244,7 @@ onUnmounted(() => clearInterval(pollTimer))
   border-radius: 0.85rem;
   background: color-mix(in srgb, var(--cream) 90%, transparent);
   border: 2px solid color-mix(in srgb, var(--brown) 22%, transparent);
+  color: var(--on-light);
 }
 
 .stat strong {
@@ -298,6 +299,7 @@ onUnmounted(() => clearInterval(pollTimer))
   background: color-mix(in srgb, var(--cream) 92%, transparent);
   border: 2px solid color-mix(in srgb, var(--brown) 25%, transparent);
   border-radius: 0.95rem;
+  color: var(--on-light);
 }
 
 .queue li.processing {
@@ -357,7 +359,7 @@ onUnmounted(() => clearInterval(pollTimer))
 .hint {
   margin: 0.3rem 0 0;
   font-size: 0.9rem;
-  color: color-mix(in srgb, var(--ink) 75%, transparent);
+  color: color-mix(in srgb, var(--on-light) 70%, transparent);
 }
 
 .hint {
@@ -439,6 +441,7 @@ onUnmounted(() => clearInterval(pollTimer))
   padding: 1.25rem;
   background: color-mix(in srgb, var(--cream) 88%, transparent);
   border-radius: 0.85rem;
+  color: var(--on-light);
 }
 
 .foot {

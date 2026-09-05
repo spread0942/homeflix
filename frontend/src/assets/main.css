@@ -1,12 +1,14 @@
 :root {
-  --accent-yellow: #f5c518;
-  --accent: #e85d04;
-  --brown: #5c3a21;
-  --teal: #0a7a7a;
-  --cream: #fff8e7;
-  --ink: #2a1a10;
-  --foam: rgba(255, 248, 231, 0.92);
-  --shadow: rgba(42, 26, 16, 0.18);
+  --accent-yellow: #c65f20;
+  --accent: #6f34ad;
+  --brown: #c65f20;
+  --teal: #6f34ad;
+  --cream: #ffffff;
+  --ink: #ffffff;
+  --on-light: #0a100d;
+  --bg: #0a100d;
+  --foam: rgba(255, 255, 255, 0.92);
+  --shadow: rgba(10, 16, 13, 0.45);
   --font-display: 'Fraunces', Georgia, serif;
   --font-body: 'Nunito', system-ui, sans-serif;
 }
@@ -27,9 +29,10 @@ body {
   font-family: var(--font-body);
   color: var(--ink);
   background:
-    radial-gradient(ellipse 120% 80% at 10% -10%, rgba(245, 197, 24, 0.35), transparent 55%),
-    radial-gradient(ellipse 90% 70% at 100% 0%, rgba(10, 122, 122, 0.28), transparent 50%),
-    linear-gradient(180deg, #c8e8e4 0%, #7eb8b4 38%, #3d8f8a 70%, #246866 100%);
+    radial-gradient(ellipse 110% 70% at 8% -5%, rgba(111, 52, 173, 0.45), transparent 55%),
+    radial-gradient(ellipse 90% 60% at 100% 5%, rgba(198, 95, 32, 0.32), transparent 50%),
+    radial-gradient(ellipse 80% 50% at 50% 100%, rgba(111, 52, 173, 0.2), transparent 55%),
+    linear-gradient(180deg, #121a16 0%, #0a100d 45%, #080c0a 100%);
   background-attachment: fixed;
 }
 
@@ -38,13 +41,13 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: 0.12;
+  opacity: 0.08;
   background-image: repeating-linear-gradient(
     95deg,
     transparent,
     transparent 18px,
-    rgba(92, 58, 33, 0.35) 18px,
-    rgba(92, 58, 33, 0.35) 19px
+    rgba(198, 95, 32, 0.4) 18px,
+    rgba(198, 95, 32, 0.4) 19px
   );
   z-index: 0;
 }
@@ -62,8 +65,15 @@ a {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
+}
+
+input,
+textarea,
+select {
+  color: var(--on-light);
 }
 
 button {

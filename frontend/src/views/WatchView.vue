@@ -468,6 +468,7 @@ video,
   background: color-mix(in srgb, var(--cream) 90%, transparent);
   border: 2px solid color-mix(in srgb, var(--brown) 28%, transparent);
   border-radius: 1rem;
+  color: var(--on-light);
 }
 
 .eyebrow {
@@ -495,7 +496,7 @@ video,
   margin: 0 0 1rem;
   font-size: 0.9rem;
   font-weight: 700;
-  color: color-mix(in srgb, var(--ink) 70%, transparent);
+  color: color-mix(in srgb, var(--on-light) 70%, transparent);
 }
 
 .shortcuts kbd {
@@ -532,6 +533,7 @@ video,
   padding: 2rem;
   background: color-mix(in srgb, var(--cream) 88%, transparent);
   border-radius: 1rem;
+  color: var(--on-light);
 }
 
 .state.error {

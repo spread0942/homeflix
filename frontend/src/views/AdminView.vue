@@ -465,6 +465,7 @@ function filmMeta(film) {
   background: color-mix(in srgb, var(--cream) 92%, transparent);
   border: 2px solid color-mix(in srgb, var(--brown) 30%, transparent);
   border-radius: 1rem;
+  color: var(--on-light);
 }
 
 .form h2 {
@@ -495,7 +496,7 @@ select {
   border: 2px solid color-mix(in srgb, var(--brown) 40%, transparent);
   border-radius: 0.65rem;
   background: #fff;
-  color: var(--ink);
+  color: var(--on-light);
 }
 
 .row2,
@@ -589,6 +590,7 @@ select {
   background: color-mix(in srgb, var(--cream) 90%, transparent);
   border: 2px solid color-mix(in srgb, var(--brown) 25%, transparent);
   border-radius: 0.85rem;
+  color: var(--on-light);
 }
 
 .list img,
@@ -610,7 +612,7 @@ select {
 .list p {
   margin: 0.25rem 0 0;
   font-size: 0.9rem;
-  color: color-mix(in srgb, var(--ink) 75%, transparent);
+  color: color-mix(in srgb, var(--on-light) 70%, transparent);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -647,6 +649,7 @@ select {
   padding: 1.25rem;
   background: color-mix(in srgb, var(--cream) 88%, transparent);
   border-radius: 0.85rem;
+  color: var(--on-light);
 }
 
 @media (max-width: 560px) {

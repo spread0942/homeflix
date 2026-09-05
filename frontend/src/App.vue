@@ -59,7 +59,7 @@ const isHome = computed(() => route.name === 'home')
   font-weight: 700;
   font-size: clamp(1.35rem, 3vw, 1.85rem);
   letter-spacing: 0.01em;
-  color: var(--brown);
+  color: var(--cream);
 }
 
 .brand-mark {
@@ -68,11 +68,15 @@ const isHome = computed(() => route.name === 'home')
   width: 2.1rem;
   height: 2.1rem;
   border-radius: 50%;
-  background: var(--accent-yellow);
-  color: var(--accent);
+  background: var(--accent);
+  color: var(--cream);
   font-size: 0.75rem;
-  box-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--accent-yellow) 55%, transparent);
   animation: softPulse 4s ease-in-out infinite;
+}
+
+.topbar.compact .brand {
+  color: var(--on-light);
 }
 
 .nav {

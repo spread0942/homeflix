@@ -207,7 +207,7 @@ function openFilm(id) {
   border-radius: 0.85rem;
   background: color-mix(in srgb, var(--cream) 90%, transparent);
   text-align: left;
-  color: inherit;
+  color: var(--on-light);
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
@@ -241,7 +241,7 @@ function openFilm(id) {
 .meta p {
   margin: 0.25rem 0 0;
   font-size: 0.9rem;
-  color: color-mix(in srgb, var(--ink) 75%, transparent);
+  color: color-mix(in srgb, var(--on-light) 70%, transparent);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -252,6 +252,7 @@ function openFilm(id) {
   padding: 1.5rem;
   background: color-mix(in srgb, var(--cream) 88%, transparent);
   border-radius: 1rem;
+  color: var(--on-light);
 }
 
 .state.error {
