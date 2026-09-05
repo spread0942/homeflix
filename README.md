@@ -9,7 +9,7 @@ Personal Netflix-style film streaming with a One Piece / Thousand Sunny theme. N
 - **Go** API — Postgres metadata + file upload/stream
 - **Postgres 16** — `series` + `animations` tables
 
-## Quick start
+## Quick start (hot reload)
 
 ```bash
 docker compose up --build
@@ -17,9 +17,17 @@ docker compose up --build
 
 Open [http://localhost](http://localhost).
 
+The frontend runs **Vite** with hot module reload (via [`docker-compose.override.yml`](docker-compose.override.yml)): edit files under `frontend/` and the browser updates without rebuilding the image.
+
+**Production-style nginx build** (no hot reload):
+
+```bash
+docker compose -f docker-compose.yml up --build
+```
+
 - **Home** — series cards + standalone films (search both)
 - **Series** — seasons / parts list for a franchise or show
-- **Watch** — HTML5 player with range seeking
+- **Watch** — HTML5 player with range seeking + keyboard shortcuts
 - **Workshop (`/conversions`)** — live conversion queue (processing / ready / failed)
 - **Galley-La (`/admin`)** — create series, upload films with season/episode/sort
 
@@ -40,14 +48,13 @@ Open [http://localhost](http://localhost).
 
 Media files live in the Docker volume `media_data`. **Firefox/Chrome need H.264 video + AAC audio in an MP4** (not MKV/HEVC). Unsupported uploads are auto-converted with ffmpeg in the background (`playback_status`: `processing` → `ready`).
 
-## Local frontend dev (optional)
+## Local frontend outside Compose (optional)
 
 ```bash
-# Start API + DB with Compose, or run the Go binary against local Postgres
 cd frontend && npm install && npm run dev
 ```
 
-Vite proxies `/api` to `http://localhost:8080`.
+Vite proxies `/api` to `http://localhost:8080` (start the API separately).
 
 ## API
 
