@@ -56,6 +56,28 @@ cd frontend && npm install && npm run dev
 
 Vite proxies `/api` to `http://localhost:8080` (start the API separately).
 
+## Release (tagged containers)
+
+Push a semver tag `vx.x.x` (e.g. `v1.0.0`) to trigger [`.github/workflows/release.yml`](.github/workflows/release.yml). It builds and pushes:
+
+- `ghcr.io/spread0942/homeflix-frontend:v1.0.0` (+ `latest`)
+- `ghcr.io/spread0942/homeflix-backend:v1.0.0` (+ `latest`)
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Deploy a release without rebuilding locally:
+
+```bash
+export HOMEFLIX_VERSION=v1.0.0
+docker compose -f docker-compose.yml pull
+docker compose -f docker-compose.yml up -d
+```
+
+If the GHCR packages are private, log in first: `echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin`.
+
 ## API
 
 | Method | Path | Description |
