@@ -40,12 +40,14 @@ func (a *API) Routes() chi.Router {
 	r.Get("/series", a.ListSeries)
 	r.Post("/series", a.CreateSeries)
 	r.Get("/series/{id}", a.GetSeries)
+	r.Put("/series/{id}", a.UpdateSeries)
 	r.Delete("/series/{id}", a.DeleteSeries)
 	r.Get("/series/{id}/poster", a.ServeSeriesPoster)
 
 	r.Get("/animations", a.ListAnimations)
 	r.Post("/animations", a.CreateAnimation)
 	r.Get("/animations/{id}", a.GetAnimation)
+	r.Put("/animations/{id}", a.UpdateAnimation)
 	r.Delete("/animations/{id}", a.DeleteAnimation)
 	r.Post("/animations/{id}/transcode", a.TranscodeAnimation)
 	r.Get("/animations/{id}/poster", a.ServePoster)
@@ -152,6 +154,82 @@ func (a *API) CreateSeries(w http.ResponseWriter, r *http.Request) {
 	ser.EntryCount = 0
 	ser.Entries = []models.Animation{}
 	writeJSON(w, http.StatusCreated, ser)
+}
+
+func (a *API) UpdateSeries(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	existing, err := a.Store.GetSeries(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get series")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		if err2 := r.ParseForm(); err2 != nil {
+			writeError(w, http.StatusBadRequest, "invalid form")
+			return
+		}
+	}
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	description := strings.TrimSpace(r.FormValue("description"))
+	kind := strings.TrimSpace(r.FormValue("kind"))
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	if kind == "" {
+		kind = existing.Kind
+	}
+	switch kind {
+	case "franchise", "tv", "anime":
+	default:
+		writeError(w, http.StatusBadRequest, "kind must be franchise, tv, or anime")
+		return
+	}
+
+	posterRel := existing.PosterPath
+	var newPosterAbs string
+	posterFile, _, err := r.FormFile("poster")
+	if err == nil {
+		defer posterFile.Close()
+		rel := filepath.Join("series_posters", id.String()+".webp")
+		abs := filepath.Join(a.MediaRoot, rel)
+		if err := saveImageAsWebP(posterFile, abs); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to save poster")
+			return
+		}
+		posterRel = &rel
+		newPosterAbs = abs
+	}
+
+	existing.Name = name
+	existing.Description = description
+	existing.Kind = kind
+	existing.PosterPath = posterRel
+	if err := a.Store.UpdateSeries(r.Context(), existing); err != nil {
+		if newPosterAbs != "" {
+			_ = os.Remove(newPosterAbs)
+		}
+		writeError(w, http.StatusInternalServerError, "failed to update series")
+		return
+	}
+
+	updated, err := a.Store.GetSeries(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to reload series")
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
 }
 
 func (a *API) DeleteSeries(w http.ResponseWriter, r *http.Request) {
@@ -360,6 +438,115 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 		anim.WithURLs()
 	}
 	writeJSON(w, http.StatusCreated, anim)
+}
+
+func (a *API) UpdateAnimation(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	existing, err := a.Store.Get(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get animation")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		if err2 := r.ParseForm(); err2 != nil {
+			writeError(w, http.StatusBadRequest, "invalid form")
+			return
+		}
+	}
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	description := strings.TrimSpace(r.FormValue("description"))
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+
+	var seriesID *uuid.UUID
+	if raw := strings.TrimSpace(r.FormValue("series_id")); raw != "" {
+		sid, err := uuid.Parse(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid series_id")
+			return
+		}
+		if _, err := a.Store.GetSeries(r.Context(), sid); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeError(w, http.StatusBadRequest, "series not found")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "failed to validate series")
+			return
+		}
+		seriesID = &sid
+	}
+
+	season, err := parseOptionalInt(r.FormValue("season"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid season")
+		return
+	}
+	episode, err := parseOptionalInt(r.FormValue("episode"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid episode")
+		return
+	}
+	sortOrder := existing.SortOrder
+	if raw := strings.TrimSpace(r.FormValue("sort_order")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid sort_order")
+			return
+		}
+		sortOrder = n
+	} else if _, ok := r.Form["sort_order"]; ok {
+		sortOrder = 0
+	}
+
+	posterRel := existing.PosterPath
+	var newPosterAbs string
+	posterFile, _, err := r.FormFile("poster")
+	if err == nil {
+		defer posterFile.Close()
+		rel := filepath.Join("posters", id.String()+".webp")
+		abs := filepath.Join(a.MediaRoot, rel)
+		if err := saveImageAsWebP(posterFile, abs); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to save poster")
+			return
+		}
+		posterRel = rel
+		newPosterAbs = abs
+	}
+
+	existing.Name = name
+	existing.Description = description
+	existing.PosterPath = posterRel
+	existing.SeriesID = seriesID
+	existing.Season = season
+	existing.Episode = episode
+	existing.SortOrder = sortOrder
+	if err := a.Store.Update(r.Context(), existing); err != nil {
+		if newPosterAbs != "" {
+			_ = os.Remove(newPosterAbs)
+		}
+		writeError(w, http.StatusInternalServerError, "failed to update animation")
+		return
+	}
+
+	updated, err := a.Store.Get(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to reload animation")
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
 }
 
 func (a *API) TranscodeAnimation(w http.ResponseWriter, r *http.Request) {

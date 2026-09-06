@@ -87,12 +87,14 @@ If the GHCR packages are private, log in first: `echo $GITHUB_TOKEN | docker log
 | `GET` | `/api/series/{id}` | Series + ordered entries |
 | `GET` | `/api/series/{id}/poster` | Series cover (or first entry) |
 | `POST` | `/api/series` | Multipart: `name`, `description`, `kind`, optional `poster` |
+| `PUT` | `/api/series/{id}` | Multipart: update fields; optional new `poster` |
 | `DELETE` | `/api/series/{id}` | Delete series + all entries/files |
 | `GET` | `/api/animations?q=` | List / search all films |
 | `GET` | `/api/animations/{id}` | Metadata |
 | `GET` | `/api/animations/{id}/poster` | Poster image |
 | `GET` | `/api/animations/{id}/stream` | Video (byte-range) |
 | `POST` | `/api/animations` | Multipart: `name`, `description`, `video`, `poster`, optional `series_id`, `season`, `episode`, `sort_order` |
+| `PUT` | `/api/animations/{id}` | Multipart: update metadata; optional new `poster` (video unchanged) |
 | `DELETE` | `/api/animations/{id}` | Delete row + files |
 | `GET` | `/api/health` | Health check |
 

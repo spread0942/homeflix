@@ -31,6 +31,13 @@ export function createSeries(formData) {
   })
 }
 
+export function updateSeries(id, formData) {
+  return request(`/series/${id}`, {
+    method: 'PUT',
+    body: formData,
+  })
+}
+
 export function deleteSeries(id) {
   return request(`/series/${id}`, { method: 'DELETE' })
 }
@@ -51,6 +58,13 @@ export function deleteAnimation(id) {
 export function createAnimation(formData) {
   return request('/animations', {
     method: 'POST',
+    body: formData,
+  })
+}
+
+export function updateAnimation(id, formData) {
+  return request(`/animations/${id}`, {
+    method: 'PUT',
     body: formData,
   })
 }

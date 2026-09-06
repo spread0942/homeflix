@@ -133,6 +133,24 @@ func (s *Store) Create(ctx context.Context, a *models.Animation) error {
 	).Scan(&a.CreatedAt)
 }
 
+func (s *Store) Update(ctx context.Context, a *models.Animation) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE animations
+		SET name = $2, description = $3, poster_path = $4,
+			series_id = $5, season = $6, episode = $7, sort_order = $8
+		WHERE id = $1`,
+		a.ID, a.Name, a.Description, a.PosterPath,
+		a.SeriesID, a.Season, a.Episode, a.SortOrder,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
 func (s *Store) UpdatePlayback(ctx context.Context, id uuid.UUID, videoPath, contentType, status string) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE animations
@@ -306,6 +324,22 @@ func (s *Store) CreateSeries(ctx context.Context, ser *models.Series) error {
 		RETURNING created_at`,
 		ser.ID, ser.Name, ser.Description, ser.PosterPath, ser.Kind,
 	).Scan(&ser.CreatedAt)
+}
+
+func (s *Store) UpdateSeries(ctx context.Context, ser *models.Series) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE series
+		SET name = $2, description = $3, poster_path = $4, kind = $5
+		WHERE id = $1`,
+		ser.ID, ser.Name, ser.Description, ser.PosterPath, ser.Kind,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
 
 func (s *Store) DeleteSeries(ctx context.Context, id uuid.UUID) (*models.Series, []models.Animation, error) {

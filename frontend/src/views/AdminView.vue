@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import {
   createAnimation,
   createSeries,
@@ -7,6 +7,8 @@ import {
   deleteSeries,
   listAnimations,
   listSeries,
+  updateAnimation,
+  updateSeries,
 } from '../api'
 
 const tab = ref('films') // 'films' | 'series'
@@ -19,6 +21,7 @@ const seriesSubmitting = ref(false)
 const error = ref('')
 const success = ref('')
 
+const editingFilmId = ref(null)
 const name = ref('')
 const description = ref('')
 const seriesId = ref('')
@@ -27,13 +30,18 @@ const episode = ref('')
 const sortOrder = ref('0')
 const videoFile = ref(null)
 const posterFile = ref(null)
+const filmFormEl = ref(null)
 
+const editingSeriesId = ref(null)
 const seriesName = ref('')
 const seriesDescription = ref('')
 const seriesKind = ref('franchise')
 const seriesPosterFile = ref(null)
+const seriesFormEl = ref(null)
 
 const inSeries = computed(() => Boolean(seriesId.value))
+const editingFilm = computed(() => Boolean(editingFilmId.value))
+const editingSeries = computed(() => Boolean(editingSeriesId.value))
 
 async function refresh() {
   loading.value = true
@@ -63,6 +71,73 @@ function onSeriesPosterChange(e) {
   seriesPosterFile.value = e.target.files?.[0] || null
 }
 
+function resetFilmForm(keepSeries = '') {
+  editingFilmId.value = null
+  name.value = ''
+  description.value = ''
+  seriesId.value = keepSeries
+  season.value = ''
+  episode.value = ''
+  sortOrder.value = '0'
+  videoFile.value = null
+  posterFile.value = null
+  if (filmFormEl.value) filmFormEl.value.reset()
+  seriesId.value = keepSeries
+}
+
+function resetSeriesForm() {
+  editingSeriesId.value = null
+  seriesName.value = ''
+  seriesDescription.value = ''
+  seriesKind.value = 'franchise'
+  seriesPosterFile.value = null
+  if (seriesFormEl.value) seriesFormEl.value.reset()
+}
+
+function startEditFilm(film) {
+  tab.value = 'films'
+  editingFilmId.value = film.id
+  name.value = film.name || ''
+  description.value = film.description || ''
+  seriesId.value = film.series_id || ''
+  season.value = film.season != null ? String(film.season) : ''
+  episode.value = film.episode != null ? String(film.episode) : ''
+  sortOrder.value = film.sort_order != null ? String(film.sort_order) : '0'
+  videoFile.value = null
+  posterFile.value = null
+  success.value = ''
+  error.value = ''
+  nextTick(() => {
+    filmFormEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+}
+
+function cancelEditFilm() {
+  resetFilmForm(seriesId.value)
+  success.value = ''
+  error.value = ''
+}
+
+function startEditSeries(s) {
+  tab.value = 'series'
+  editingSeriesId.value = s.id
+  seriesName.value = s.name || ''
+  seriesDescription.value = s.description || ''
+  seriesKind.value = s.kind || 'franchise'
+  seriesPosterFile.value = null
+  success.value = ''
+  error.value = ''
+  nextTick(() => {
+    seriesFormEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+}
+
+function cancelEditSeries() {
+  resetSeriesForm()
+  success.value = ''
+  error.value = ''
+}
+
 async function onCreateSeries(e) {
   e.preventDefault()
   success.value = ''
@@ -79,15 +154,17 @@ async function onCreateSeries(e) {
 
   seriesSubmitting.value = true
   try {
-    const created = await createSeries(form)
-    success.value = `Series "${created.name}" created.`
-    seriesName.value = ''
-    seriesDescription.value = ''
-    seriesKind.value = 'franchise'
-    seriesPosterFile.value = null
-    e.target.reset()
+    if (editingSeriesId.value) {
+      const updated = await updateSeries(editingSeriesId.value, form)
+      success.value = `Series "${updated.name}" updated.`
+      resetSeriesForm()
+    } else {
+      const created = await createSeries(form)
+      success.value = `Series "${created.name}" created.`
+      resetSeriesForm()
+      seriesId.value = created.id
+    }
     await refresh()
-    seriesId.value = created.id
   } catch (err) {
     error.value = err.message
   } finally {
@@ -100,7 +177,11 @@ async function onSubmit(e) {
   success.value = ''
   error.value = ''
 
-  if (!name.value.trim() || !videoFile.value || !posterFile.value) {
+  if (!name.value.trim()) {
+    error.value = 'Name is required.'
+    return
+  }
+  if (!editingFilm.value && (!videoFile.value || !posterFile.value)) {
     error.value = 'Name, video, and poster are required.'
     return
   }
@@ -108,27 +189,31 @@ async function onSubmit(e) {
   const form = new FormData()
   form.append('name', name.value.trim())
   form.append('description', description.value.trim())
-  form.append('video', videoFile.value)
-  form.append('poster', posterFile.value)
-  if (seriesId.value) form.append('series_id', seriesId.value)
+  form.append('series_id', seriesId.value)
   if (season.value !== '') form.append('season', season.value)
+  else form.append('season', '')
   if (episode.value !== '') form.append('episode', episode.value)
+  else form.append('episode', '')
   form.append('sort_order', sortOrder.value || '0')
+  if (!editingFilm.value) {
+    form.append('video', videoFile.value)
+    form.append('poster', posterFile.value)
+  } else if (posterFile.value) {
+    form.append('poster', posterFile.value)
+  }
 
   submitting.value = true
   try {
-    await createAnimation(form)
-    success.value = `"${name.value.trim()}" uploaded.`
-    const keepSeries = seriesId.value
-    name.value = ''
-    description.value = ''
-    season.value = ''
-    episode.value = ''
-    sortOrder.value = '0'
-    videoFile.value = null
-    posterFile.value = null
-    e.target.reset()
-    seriesId.value = keepSeries
+    if (editingFilm.value) {
+      await updateAnimation(editingFilmId.value, form)
+      success.value = `"${name.value.trim()}" updated.`
+      resetFilmForm(seriesId.value)
+    } else {
+      await createAnimation(form)
+      success.value = `"${name.value.trim()}" uploaded.`
+      const keepSeries = seriesId.value
+      resetFilmForm(keepSeries)
+    }
     await refresh()
   } catch (err) {
     error.value = err.message
@@ -142,6 +227,7 @@ async function removeFilm(id, filmName) {
   error.value = ''
   try {
     await deleteAnimation(id)
+    if (editingFilmId.value === id) resetFilmForm()
     await refresh()
   } catch (e) {
     error.value = e.message
@@ -154,6 +240,7 @@ async function removeSeries(id, name) {
   try {
     await deleteSeries(id)
     if (seriesId.value === id) seriesId.value = ''
+    if (editingSeriesId.value === id) resetSeriesForm()
     await refresh()
   } catch (e) {
     error.value = e.message
@@ -167,6 +254,16 @@ function filmMeta(film) {
   if (film.episode != null) bits.push(`E${film.episode}`)
   if (!film.series_id && film.sort_order) bits.push(`#${film.sort_order}`)
   return bits.join(' · ')
+}
+
+function submitLabel() {
+  if (submitting.value) return editingFilm.value ? 'Saving…' : 'Uploading…'
+  return editingFilm.value ? 'Save changes' : 'Upload'
+}
+
+function seriesSubmitLabel() {
+  if (seriesSubmitting.value) return editingSeries.value ? 'Saving…' : 'Creating…'
+  return editingSeries.value ? 'Save series' : 'Create series'
 }
 </script>
 
@@ -205,8 +302,8 @@ function filmMeta(film) {
     <p v-if="error" class="banner err">{{ error }}</p>
 
     <div v-show="tab === 'films'" class="panel">
-      <form class="form" @submit="onSubmit">
-        <h2>Upload film / episode</h2>
+      <form ref="filmFormEl" class="form" @submit="onSubmit">
+        <h2>{{ editingFilm ? 'Edit film / episode' : 'Upload film / episode' }}</h2>
         <label>
           Name
           <input
@@ -254,19 +351,39 @@ function filmMeta(film) {
           season + episode.
         </p>
         <div class="files">
-          <label>
+          <label v-if="!editingFilm">
             Video file
             <input type="file" accept="video/*" required @change="onVideoChange" />
           </label>
           <label>
-            Poster image
-            <input type="file" accept="image/*" required @change="onPosterChange" />
-            <span class="field-note">Converted to WebP on upload</span>
+            {{ editingFilm ? 'New poster (optional)' : 'Poster image' }}
+            <input
+              type="file"
+              accept="image/*"
+              :required="!editingFilm"
+              @change="onPosterChange"
+            />
+            <span class="field-note">{{
+              editingFilm
+                ? 'Leave empty to keep the current poster'
+                : 'Converted to WebP on upload'
+            }}</span>
           </label>
         </div>
-        <button class="submit" type="submit" :disabled="submitting">
-          {{ submitting ? 'Uploading…' : 'Upload' }}
-        </button>
+        <div class="form-actions">
+          <button class="submit" type="submit" :disabled="submitting">
+            {{ submitLabel() }}
+          </button>
+          <button
+            v-if="editingFilm"
+            type="button"
+            class="cancel"
+            :disabled="submitting"
+            @click="cancelEditFilm"
+          >
+            Cancel
+          </button>
+        </div>
       </form>
 
       <div class="inventory">
@@ -285,6 +402,7 @@ function filmMeta(film) {
               </p>
             </div>
             <div class="actions">
+              <button type="button" class="edit" @click="startEditFilm(film)">Edit</button>
               <RouterLink :to="{ name: 'watch', params: { id: film.id } }">Watch</RouterLink>
               <button type="button" class="danger" @click="removeFilm(film.id, film.name)">
                 Delete
@@ -297,8 +415,8 @@ function filmMeta(film) {
     </div>
 
     <div v-show="tab === 'series'" class="panel">
-      <form class="form" @submit="onCreateSeries">
-        <h2>New series</h2>
+      <form ref="seriesFormEl" class="form" @submit="onCreateSeries">
+        <h2>{{ editingSeries ? 'Edit series' : 'New series' }}</h2>
         <label>
           Series name
           <input
@@ -328,14 +446,29 @@ function filmMeta(film) {
             </select>
           </label>
           <label>
-            Cover poster (optional)
+            {{ editingSeries ? 'New cover (optional)' : 'Cover poster (optional)' }}
             <input type="file" accept="image/*" @change="onSeriesPosterChange" />
-            <span class="field-note">Converted to WebP on upload</span>
+            <span class="field-note">{{
+              editingSeries
+                ? 'Leave empty to keep the current cover'
+                : 'Converted to WebP on upload'
+            }}</span>
           </label>
         </div>
-        <button class="submit" type="submit" :disabled="seriesSubmitting">
-          {{ seriesSubmitting ? 'Creating…' : 'Create series' }}
-        </button>
+        <div class="form-actions">
+          <button class="submit" type="submit" :disabled="seriesSubmitting">
+            {{ seriesSubmitLabel() }}
+          </button>
+          <button
+            v-if="editingSeries"
+            type="button"
+            class="cancel"
+            :disabled="seriesSubmitting"
+            @click="cancelEditSeries"
+          >
+            Cancel
+          </button>
+        </div>
       </form>
 
       <div class="inventory">
@@ -350,6 +483,7 @@ function filmMeta(film) {
               <p>{{ s.kind }} · {{ s.entry_count }} entries</p>
             </div>
             <div class="actions">
+              <button type="button" class="edit" @click="startEditSeries(s)">Edit</button>
               <RouterLink :to="{ name: 'series', params: { id: s.id } }">Open</RouterLink>
               <button type="button" class="danger" @click="removeSeries(s.id, s.name)">
                 Delete
@@ -524,6 +658,13 @@ select {
   color: var(--teal);
 }
 
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
 .submit {
   justify-self: start;
   padding: 0.75rem 1.4rem;
@@ -543,6 +684,15 @@ select {
 .submit:disabled {
   opacity: 0.7;
   cursor: wait;
+}
+
+.cancel {
+  padding: 0.75rem 1.2rem;
+  border: 2px solid color-mix(in srgb, var(--brown) 40%, transparent);
+  border-radius: 999px;
+  font-weight: 700;
+  color: var(--brown);
+  background: transparent;
 }
 
 .banner {
@@ -626,6 +776,7 @@ select {
 }
 
 .actions a,
+.edit,
 .danger {
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
@@ -637,6 +788,12 @@ select {
 .actions a {
   background: var(--teal);
   color: var(--cream);
+}
+
+.edit {
+  background: color-mix(in srgb, var(--accent-yellow) 70%, #fff);
+  color: var(--brown);
+  border: 1px solid color-mix(in srgb, var(--brown) 35%, transparent);
 }
 
 .danger {
