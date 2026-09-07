@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Edit films and series from Admin (`PUT /api/animations/{id}`, `PUT /api/series/{id}`)
 - Optional poster replacement on update; video file is left unchanged
+- Optional poster on upload: if omitted, a WebP preview frame is extracted from the video
 
 ## [1.0.0] - 2026-09-05
 

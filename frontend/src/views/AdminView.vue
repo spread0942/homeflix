@@ -181,8 +181,8 @@ async function onSubmit(e) {
     error.value = 'Name is required.'
     return
   }
-  if (!editingFilm.value && (!videoFile.value || !posterFile.value)) {
-    error.value = 'Name, video, and poster are required.'
+  if (!editingFilm.value && !videoFile.value) {
+    error.value = 'Name and video are required.'
     return
   }
 
@@ -197,8 +197,8 @@ async function onSubmit(e) {
   form.append('sort_order', sortOrder.value || '0')
   if (!editingFilm.value) {
     form.append('video', videoFile.value)
-    form.append('poster', posterFile.value)
-  } else if (posterFile.value) {
+  }
+  if (posterFile.value) {
     form.append('poster', posterFile.value)
   }
 
@@ -356,17 +356,12 @@ function seriesSubmitLabel() {
             <input type="file" accept="video/*" required @change="onVideoChange" />
           </label>
           <label>
-            {{ editingFilm ? 'New poster (optional)' : 'Poster image' }}
-            <input
-              type="file"
-              accept="image/*"
-              :required="!editingFilm"
-              @change="onPosterChange"
-            />
+            {{ editingFilm ? 'New poster (optional)' : 'Poster image (optional)' }}
+            <input type="file" accept="image/*" @change="onPosterChange" />
             <span class="field-note">{{
               editingFilm
                 ? 'Leave empty to keep the current poster'
-                : 'Converted to WebP on upload'
+                : 'Leave empty to grab a preview frame from the video'
             }}</span>
           </label>
         </div>

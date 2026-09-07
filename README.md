@@ -46,7 +46,7 @@ docker compose -f docker-compose.yml up --build
 | `MEDIA_ROOT` | `/data` | Video + poster storage |
 | `PORT` | `8080` | API listen port |
 
-Media files live in the Docker volume `media_data`. **Firefox/Chrome need H.264 video + AAC audio in an MP4** (not MKV/HEVC). Unsupported uploads are auto-converted with ffmpeg in the background (`playback_status`: `processing` → `ready`). Poster images are converted to **WebP** on upload.
+Media files live in the Docker volume `media_data`. **Firefox/Chrome need H.264 video + AAC audio in an MP4** (not MKV/HEVC). Unsupported uploads are auto-converted with ffmpeg in the background (`playback_status`: `processing` → `ready`). Poster images are optional: upload one (stored as **WebP**) or leave empty and a preview frame is extracted from the video.
 
 ## Local frontend outside Compose (optional)
 
@@ -93,7 +93,7 @@ If the GHCR packages are private, log in first: `echo $GITHUB_TOKEN | docker log
 | `GET` | `/api/animations/{id}` | Metadata |
 | `GET` | `/api/animations/{id}/poster` | Poster image |
 | `GET` | `/api/animations/{id}/stream` | Video (byte-range) |
-| `POST` | `/api/animations` | Multipart: `name`, `description`, `video`, `poster`, optional `series_id`, `season`, `episode`, `sort_order` |
+| `POST` | `/api/animations` | Multipart: `name`, `description`, `video`, optional `poster`, optional `series_id`, `season`, `episode`, `sort_order` |
 | `PUT` | `/api/animations/{id}` | Multipart: update metadata; optional new `poster` (video unchanged) |
 | `DELETE` | `/api/animations/{id}` | Delete row + files |
 | `GET` | `/api/health` | Health check |

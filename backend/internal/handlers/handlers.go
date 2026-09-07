@@ -366,12 +366,11 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 	}
 	defer videoFile.Close()
 
-	posterFile, _, err := r.FormFile("poster")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "poster file is required")
-		return
+	posterFile, _, posterErr := r.FormFile("poster")
+	hasPoster := posterErr == nil
+	if hasPoster {
+		defer posterFile.Close()
 	}
-	defer posterFile.Close()
 
 	id := uuid.New()
 	videoExt := extOr(videoHeader.Filename, ".mp4")
@@ -393,9 +392,16 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to save video")
 		return
 	}
-	if err := saveImageAsWebP(posterFile, posterAbs); err != nil {
+	if hasPoster {
+		if err := saveImageAsWebP(posterFile, posterAbs); err != nil {
+			_ = os.Remove(videoAbs)
+			writeError(w, http.StatusInternalServerError, "failed to save poster")
+			return
+		}
+	} else if err := imageconv.ExtractFrameAsWebP(videoAbs, posterAbs); err != nil {
 		_ = os.Remove(videoAbs)
-		writeError(w, http.StatusInternalServerError, "failed to save poster")
+		log.Printf("auto poster for %s: %v", id, err)
+		writeError(w, http.StatusInternalServerError, "failed to generate poster from video")
 		return
 	}
 
