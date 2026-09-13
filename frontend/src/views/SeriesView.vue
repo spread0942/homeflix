@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getSeries } from '../api'
+import { entryLabel, groupBySeason, isPlayable } from '../lib/seriesNav'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -28,39 +29,18 @@ async function load() {
 onMounted(load)
 watch(() => props.id, load)
 
-const seasons = computed(() => {
-  const entries = series.value?.entries || []
-  const map = new Map()
-  for (const e of entries) {
-    const key = e.season == null ? 'parts' : `season-${e.season}`
-    if (!map.has(key)) {
-      map.set(key, {
-        key,
-        label: e.season == null ? 'Parts & specials' : `Season ${e.season}`,
-        season: e.season,
-        entries: [],
-      })
-    }
-    map.get(key).entries.push(e)
-  }
-  return [...map.values()].sort((a, b) => {
-    if (a.season == null && b.season == null) return 0
-    if (a.season == null) return 1
-    if (b.season == null) return -1
-    return a.season - b.season
-  })
-})
+const seasons = computed(() => groupBySeason(series.value?.entries || []))
 
-function entryLabel(e) {
-  const bits = []
-  if (e.season != null) bits.push(`S${e.season}`)
-  if (e.episode != null) bits.push(`E${e.episode}`)
-  if (!bits.length && e.sort_order) bits.push(`Part ${e.sort_order}`)
-  return bits.length ? bits.join(' · ') : null
-}
+const firstPlayable = computed(() => {
+  return (series.value?.entries || []).find(isPlayable) || series.value?.entries?.[0] || null
+})
 
 function openFilm(id) {
   router.push({ name: 'watch', params: { id } })
+}
+
+function playSeries() {
+  if (firstPlayable.value) openFilm(firstPlayable.value.id)
 }
 </script>
 
@@ -78,7 +58,17 @@ function openFilm(id) {
           <p class="eyebrow">{{ series.kind }} · {{ series.entry_count }} entries</p>
           <h1>{{ series.name }}</h1>
           <p class="desc">{{ series.description || 'No description yet.' }}</p>
-          <RouterLink class="back" to="/">← Back to library</RouterLink>
+          <div class="hero-actions">
+            <button
+              v-if="firstPlayable"
+              type="button"
+              class="play-cta"
+              @click="playSeries"
+            >
+              ▶ Play {{ entryLabel(firstPlayable) || firstPlayable.name }}
+            </button>
+            <RouterLink class="back" to="/">← Back to library</RouterLink>
+          </div>
         </div>
       </header>
 
@@ -171,6 +161,31 @@ function openFilm(id) {
   max-width: 40rem;
   color: var(--ink);
   line-height: 1.5;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem 1.25rem;
+}
+
+.play-cta {
+  padding: 0.65rem 1.15rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--cream);
+  font-weight: 800;
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--accent-yellow) 55%, transparent);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.play-cta:hover,
+.play-cta:focus-visible {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--accent) 85%, #000);
+  outline: none;
 }
 
 .back {
