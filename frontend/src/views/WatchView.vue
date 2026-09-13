@@ -27,6 +27,11 @@ const seekFlash = ref('') // 'back' | 'fwd' | ''
 const episodesOpen = ref(false)
 const upNextVisible = ref(false)
 const upNextSeconds = ref(0)
+const currentTime = ref(0)
+const duration = ref(0)
+const isPlayStation = /PlayStation/i.test(
+  typeof navigator !== 'undefined' ? navigator.userAgent : '',
+)
 let pollTimer
 let hideTimer
 let flashTimer
@@ -36,6 +41,20 @@ const SEEK_SECONDS = 10
 const UP_NEXT_COUNTDOWN = 8
 
 const playLabel = computed(() => (playing.value ? 'Pause' : 'Play'))
+const progressPercent = computed(() => {
+  if (!duration.value) return 0
+  return Math.min(100, Math.max(0, (currentTime.value / duration.value) * 100))
+})
+
+function formatTime(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
+  const s = Math.floor(seconds)
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const r = s % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
+  return `${m}:${String(r).padStart(2, '0')}`
+}
 
 const seriesNav = computed(() => {
   if (!film.value?.series_id || !series.value?.entries?.length) return null
@@ -69,6 +88,8 @@ async function load() {
   film.value = null
   series.value = null
   playing.value = false
+  currentTime.value = 0
+  duration.value = 0
   cancelUpNext()
   try {
     film.value = await getAnimation(props.id)
@@ -139,9 +160,12 @@ function bindVideoEvents() {
   const v = videoEl.value
   if (!v) return
   playing.value = !v.paused
+  currentTime.value = v.currentTime || 0
+  duration.value = Number.isFinite(v.duration) ? v.duration : 0
+  v.controls = true
   v.onplay = () => {
     playing.value = true
-    scheduleHideOverlay()
+    if (!isPlayStation) scheduleHideOverlay()
   }
   v.onpause = () => {
     playing.value = false
@@ -152,6 +176,25 @@ function bindVideoEvents() {
     showOverlay(true)
     startUpNextCountdown()
   }
+  v.ontimeupdate = () => {
+    currentTime.value = v.currentTime || 0
+  }
+  v.ondurationchange = () => {
+    duration.value = Number.isFinite(v.duration) ? v.duration : 0
+  }
+  v.onloadedmetadata = () => {
+    duration.value = Number.isFinite(v.duration) ? v.duration : 0
+  }
+}
+
+function onSeekInput(e) {
+  const v = videoEl.value
+  if (!v || !duration.value) return
+  const next = Number(e.target.value)
+  if (!Number.isFinite(next)) return
+  v.currentTime = next
+  currentTime.value = next
+  showOverlay()
 }
 
 function onVideoError() {
@@ -334,68 +377,113 @@ onUnmounted(() => {
       </div>
       <div
         class="player-shell"
-        @mousemove="showOverlay()"
-        @mouseleave="playing && scheduleHideOverlay()"
+        :class="{ console: isPlayStation }"
+        @mousemove="!isPlayStation && showOverlay()"
+        @mouseleave="!isPlayStation && playing && scheduleHideOverlay()"
       >
         <template v-if="film.playback_status === 'ready'">
-          <video
-            ref="videoEl"
-            :key="film.stream_url + film.playback_status"
-            controls
-            playsinline
-            preload="metadata"
-            :poster="film.poster_url"
-            :src="film.stream_url"
-            @error="onVideoError"
-          >
-            Your browser does not support HTML5 video.
-          </video>
-
-          <div class="seek-flash" :class="{ show: seekFlash === 'back', back: true }" aria-hidden="true">
-            −{{ SEEK_SECONDS }}s
-          </div>
-          <div class="seek-flash" :class="{ show: seekFlash === 'fwd', fwd: true }" aria-hidden="true">
-            +{{ SEEK_SECONDS }}s
-          </div>
-
-          <div class="overlay" :class="{ visible: overlayVisible || !playing }">
-            <button
-              type="button"
-              class="ctl"
-              :aria-label="`Rewind ${SEEK_SECONDS} seconds`"
-              @click.stop="seekBy(-SEEK_SECONDS)"
+          <div class="video-frame">
+            <video
+              ref="videoEl"
+              :key="film.stream_url + film.playback_status"
+              controls
+              playsinline
+              preload="metadata"
+              :poster="film.poster_url"
+              :src="film.stream_url"
+              @error="onVideoError"
             >
-              <span class="icon" aria-hidden="true">⟲</span>
-              <span class="ctl-label">{{ SEEK_SECONDS }}</span>
-            </button>
-            <button
-              type="button"
-              class="ctl play"
-              :aria-label="playLabel"
-              @click.stop="togglePlay"
-            >
-              <span class="icon play-icon" aria-hidden="true">{{ playing ? '❚❚' : '▶' }}</span>
-            </button>
-            <button
-              type="button"
-              class="ctl"
-              :aria-label="`Forward ${SEEK_SECONDS} seconds`"
-              @click.stop="seekBy(SEEK_SECONDS)"
-            >
-              <span class="icon" aria-hidden="true">⟳</span>
-              <span class="ctl-label">{{ SEEK_SECONDS }}</span>
-            </button>
-          </div>
+              Your browser does not support HTML5 video.
+            </video>
 
-          <div v-if="upNextVisible && nextPlayable" class="up-next" role="dialog" aria-label="Up next">
-            <p class="up-next-label">Up next in {{ upNextSeconds }}s</p>
-            <strong>{{ shortEntryLabel(nextPlayable) }} · {{ nextPlayable.name }}</strong>
-            <div class="up-next-actions">
-              <button type="button" class="up-next-play" @click="goToEntry(nextPlayable)">
-                Play now
-              </button>
-              <button type="button" class="up-next-cancel" @click="cancelUpNext">Cancel</button>
+            <div class="seek-flash" :class="{ show: seekFlash === 'back', back: true }" aria-hidden="true">
+              −{{ SEEK_SECONDS }}s
             </div>
+            <div class="seek-flash" :class="{ show: seekFlash === 'fwd', fwd: true }" aria-hidden="true">
+              +{{ SEEK_SECONDS }}s
+            </div>
+
+            <div
+              v-if="!isPlayStation"
+              class="overlay"
+              :class="{ visible: overlayVisible || !playing }"
+            >
+              <button
+                type="button"
+                class="ctl"
+                :aria-label="`Rewind ${SEEK_SECONDS} seconds`"
+                @click.stop="seekBy(-SEEK_SECONDS)"
+              >
+                <span class="icon" aria-hidden="true">⟲</span>
+                <span class="ctl-label">{{ SEEK_SECONDS }}</span>
+              </button>
+              <button
+                type="button"
+                class="ctl play"
+                :aria-label="playLabel"
+                @click.stop="togglePlay"
+              >
+                <span class="icon play-icon" aria-hidden="true">{{ playing ? '❚❚' : '▶' }}</span>
+              </button>
+              <button
+                type="button"
+                class="ctl"
+                :aria-label="`Forward ${SEEK_SECONDS} seconds`"
+                @click.stop="seekBy(SEEK_SECONDS)"
+              >
+                <span class="icon" aria-hidden="true">⟳</span>
+                <span class="ctl-label">{{ SEEK_SECONDS }}</span>
+              </button>
+            </div>
+
+            <div v-if="upNextVisible && nextPlayable" class="up-next" role="dialog" aria-label="Up next">
+              <p class="up-next-label">Up next in {{ upNextSeconds }}s</p>
+              <strong>{{ shortEntryLabel(nextPlayable) }} · {{ nextPlayable.name }}</strong>
+              <div class="up-next-actions">
+                <button type="button" class="up-next-play" @click="goToEntry(nextPlayable)">
+                  Play now
+                </button>
+                <button type="button" class="up-next-cancel" @click="cancelUpNext">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="film-bar" role="group" aria-label="Playback controls">
+            <button type="button" class="film-btn" :aria-label="playLabel" @click="togglePlay">
+              {{ playing ? '❚❚' : '▶' }}
+            </button>
+            <button
+              type="button"
+              class="film-btn"
+              :aria-label="`Rewind ${SEEK_SECONDS} seconds`"
+              @click="seekBy(-SEEK_SECONDS)"
+            >
+              −{{ SEEK_SECONDS }}s
+            </button>
+            <label class="film-scrub">
+              <span class="sr-only">Seek</span>
+              <input
+                type="range"
+                min="0"
+                step="0.1"
+                :max="duration || 0"
+                :value="currentTime"
+                :style="{ '--progress': progressPercent + '%' }"
+                :aria-valuetext="`${formatTime(currentTime)} of ${formatTime(duration)}`"
+                @input="onSeekInput"
+              />
+            </label>
+            <button
+              type="button"
+              class="film-btn"
+              :aria-label="`Forward ${SEEK_SECONDS} seconds`"
+              @click="seekBy(SEEK_SECONDS)"
+            >
+              +{{ SEEK_SECONDS }}s
+            </button>
+            <span class="film-time" aria-hidden="true">
+              {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
+            </span>
           </div>
         </template>
         <div v-else class="waiting" :style="{ backgroundImage: `url(${film.poster_url})` }">
@@ -528,10 +616,21 @@ onUnmounted(() => {
 .player-shell {
   position: relative;
   border-radius: 1rem;
-  overflow: hidden;
   border: 3px solid var(--brown);
   background: #111;
   box-shadow: 0 16px 40px var(--shadow);
+  overflow: visible;
+}
+
+.video-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.85rem 0.85rem 0 0;
+  background: #000;
+}
+
+.player-shell.console .video-frame {
+  border-radius: 0.85rem 0.85rem 0 0;
 }
 
 video,
@@ -551,11 +650,143 @@ video,
   color: var(--cream);
   font-weight: 700;
   text-shadow: 0 2px 8px #000;
+  border-radius: 0.85rem;
+}
+
+.film-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.75rem 0.85rem;
+  background: #1a1410;
+  border-top: 2px solid var(--brown);
+  border-radius: 0 0 0.75rem 0.75rem;
+}
+
+.film-btn {
+  flex: 0 0 auto;
+  min-width: 3rem;
+  min-height: 2.75rem;
+  padding: 0.45rem 0.7rem;
+  border: 2px solid var(--brown);
+  border-radius: 0.55rem;
+  background: var(--accent);
+  color: var(--cream);
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.film-btn:focus {
+  outline: 3px solid var(--accent-yellow);
+  outline-offset: 2px;
+}
+
+.film-scrub {
+  flex: 1 1 10rem;
+  min-width: 8rem;
+  display: flex;
+  align-items: center;
+}
+
+.film-scrub input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 1.4rem;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.film-scrub input[type='range']::-webkit-slider-runnable-track {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--progress, 0%),
+    #4a3b32 var(--progress, 0%),
+    #4a3b32 100%
+  );
+}
+
+.film-scrub input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-top: -0.4rem;
+  border-radius: 50%;
+  border: 2px solid var(--cream);
+  background: var(--accent-yellow);
+}
+
+.film-scrub input[type='range']::-moz-range-track {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #4a3b32;
+}
+
+.film-scrub input[type='range']::-moz-range-progress {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.film-scrub input[type='range']::-moz-range-thumb {
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  border: 2px solid var(--cream);
+  background: var(--accent-yellow);
+}
+
+.film-scrub input[type='range']:focus {
+  outline: 3px solid var(--accent-yellow);
+  outline-offset: 2px;
+}
+
+.player-shell.console .film-btn {
+  min-width: 3.6rem;
+  min-height: 3.2rem;
+  font-size: 1rem;
+}
+
+.player-shell.console .film-scrub input[type='range'] {
+  height: 2rem;
+}
+
+.player-shell.console .film-scrub input[type='range']::-webkit-slider-runnable-track {
+  height: 0.75rem;
+}
+
+.player-shell.console .film-scrub input[type='range']::-webkit-slider-thumb {
+  width: 1.7rem;
+  height: 1.7rem;
+  margin-top: -0.45rem;
+}
+
+.player-shell.console .film-time {
+  font-size: 1.05rem;
+  min-width: 7.5rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .overlay {
   position: absolute;
-  inset: 0 0 3.2rem;
+  inset: 0 0 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -975,13 +1206,30 @@ video,
   border-radius: 0;
   border: none;
   max-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.player-shell:fullscreen .video-frame,
+.player-shell:-webkit-full-screen .video-frame {
+  flex: 1;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
 }
 
 .player-shell:fullscreen video,
 .player-shell:-webkit-full-screen video {
-  max-height: 100vh;
+  max-height: calc(100vh - 4.5rem);
   height: 100%;
   object-fit: contain;
+}
+
+.player-shell:fullscreen .film-bar,
+.player-shell:-webkit-full-screen .film-bar {
+  border-radius: 0;
 }
 
 .player-shell:fullscreen .up-next,
