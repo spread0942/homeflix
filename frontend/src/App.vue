@@ -46,9 +46,6 @@ const isHome = computed(() => route.name === 'home')
 
 .topbar.compact {
   padding-block: 0.85rem;
-  background: color-mix(in srgb, var(--cream) 82%, transparent);
-  backdrop-filter: blur(8px);
-  border-bottom: 2px solid color-mix(in srgb, var(--brown) 25%, transparent);
 }
 
 .brand {
@@ -73,10 +70,6 @@ const isHome = computed(() => route.name === 'home')
   font-size: 0.75rem;
   box-shadow: 0 4px 0 color-mix(in srgb, var(--accent-yellow) 55%, transparent);
   animation: softPulse 4s ease-in-out infinite;
-}
-
-.topbar.compact .brand {
-  color: var(--on-light);
 }
 
 .nav {
