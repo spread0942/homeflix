@@ -38,6 +38,8 @@ let flashTimer
 let upNextTimer
 
 const SEEK_SECONDS = 10
+const SEEK_JUMPS = [30, 60]
+const backJumps = [60, 30]
 const UP_NEXT_COUNTDOWN = 8
 
 const playLabel = computed(() => (playing.value ? 'Pause' : 'Play'))
@@ -54,6 +56,26 @@ function formatTime(seconds) {
   const r = s % 60
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
   return `${m}:${String(r).padStart(2, '0')}`
+}
+
+function formatJump(seconds) {
+  if (seconds >= 60 && seconds % 60 === 0) return `${seconds / 60}m`
+  return `${seconds}s`
+}
+
+function mediaDuration() {
+  const v = videoEl.value
+  if (!v) return 0
+  if (Number.isFinite(v.duration) && v.duration > 0) return v.duration
+  try {
+    if (v.seekable && v.seekable.length > 0) {
+      const end = v.seekable.end(v.seekable.length - 1)
+      if (Number.isFinite(end) && end > 0) return end
+    }
+  } catch {
+    /* ignore */
+  }
+  return duration.value || 0
 }
 
 const seriesNav = computed(() => {
@@ -187,16 +209,6 @@ function bindVideoEvents() {
   }
 }
 
-function onSeekInput(e) {
-  const v = videoEl.value
-  if (!v || !duration.value) return
-  const next = Number(e.target.value)
-  if (!Number.isFinite(next)) return
-  v.currentTime = next
-  currentTime.value = next
-  showOverlay()
-}
-
 function onVideoError() {
   const status = film.value?.playback_status
   if (status === 'processing') {
@@ -251,10 +263,115 @@ async function togglePlay() {
 
 function seekBy(delta) {
   const v = videoEl.value
-  if (!v || !Number.isFinite(v.duration)) return
-  v.currentTime = Math.min(Math.max(0, v.currentTime + delta), v.duration)
+  if (!v) return
+  const total = mediaDuration()
+  const now = Number.isFinite(v.currentTime) ? v.currentTime : 0
+  let next = total > 0 ? Math.min(Math.max(0, now + delta), total) : Math.max(0, now + delta)
+  next = clampToSeekable(next)
+  try {
+    v.currentTime = next
+    currentTime.value = v.currentTime || next
+  } catch {
+    /* PS4 may reject seeks until enough data is buffered */
+  }
   flashSeek(delta < 0 ? 'back' : 'fwd')
   showOverlay()
+}
+
+function seekToRatio(ratio) {
+  const v = videoEl.value
+  const total = mediaDuration()
+  if (!v || total <= 0) return
+  let next = Math.min(Math.max(0, total * ratio), total)
+  next = clampToSeekable(next)
+  try {
+    v.currentTime = next
+    currentTime.value = v.currentTime || next
+  } catch {
+    /* ignore */
+  }
+  showOverlay()
+}
+
+function clampToSeekable(time) {
+  const v = videoEl.value
+  if (!v || !v.seekable || v.seekable.length === 0) return time
+  try {
+    for (let i = 0; i < v.seekable.length; i++) {
+      const start = v.seekable.start(i)
+      const end = v.seekable.end(i)
+      if (time >= start && time <= end) return time
+    }
+    // Prefer the nearest seekable edge (usually the end of what is buffered).
+    let nearest = v.seekable.end(0)
+    let bestDist = Math.abs(time - nearest)
+    for (let i = 0; i < v.seekable.length; i++) {
+      const start = v.seekable.start(i)
+      const end = v.seekable.end(i)
+      const candidates = [start, end]
+      for (let c = 0; c < candidates.length; c++) {
+        const dist = Math.abs(time - candidates[c])
+        if (dist < bestDist) {
+          bestDist = dist
+          nearest = candidates[c]
+        }
+      }
+    }
+    return nearest
+  } catch {
+    return time
+  }
+}
+
+function onSeekInput(e) {
+  const v = videoEl.value
+  const total = mediaDuration()
+  if (!v || total <= 0) return
+  const next = Number(e.target.value)
+  if (!Number.isFinite(next)) return
+  try {
+    v.currentTime = next
+    currentTime.value = next
+  } catch {
+    /* ignore */
+  }
+  showOverlay()
+}
+
+function onProgressClick(e) {
+  const total = mediaDuration()
+  if (total <= 0) return
+  const rect = e.currentTarget.getBoundingClientRect()
+  if (!rect.width) return
+  const x = (e.clientX - rect.left) / rect.width
+  seekToRatio(x)
+}
+
+function onFilmBarKeydown(e) {
+  if (e.defaultPrevented) return
+  if (film.value?.playback_status !== 'ready') return
+  switch (e.key) {
+    case 'ArrowLeft':
+      e.preventDefault()
+      e.stopPropagation()
+      seekBy(-(e.shiftKey ? 30 : SEEK_SECONDS))
+      break
+    case 'ArrowRight':
+      e.preventDefault()
+      e.stopPropagation()
+      seekBy(e.shiftKey ? 30 : SEEK_SECONDS)
+      break
+    case ' ':
+    case 'Enter':
+      if (e.target && e.target.closest && e.target.closest('button, a, input, select, textarea')) {
+        return
+      }
+      e.preventDefault()
+      togglePlay()
+      break
+    default:
+      break
+  }
 }
 
 function bumpVolume(delta) {
@@ -448,42 +565,122 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div class="film-bar" role="group" aria-label="Playback controls">
-            <button type="button" class="film-btn" :aria-label="playLabel" @click="togglePlay">
-              {{ playing ? '❚❚' : '▶' }}
-            </button>
-            <button
-              type="button"
-              class="film-btn"
-              :aria-label="`Rewind ${SEEK_SECONDS} seconds`"
-              @click="seekBy(-SEEK_SECONDS)"
+          <div
+            class="film-bar"
+            role="group"
+            aria-label="Playback controls"
+            tabindex="0"
+            @keydown="onFilmBarKeydown"
+          >
+            <div class="film-bar-row primary">
+              <button
+                v-if="prevEntry"
+                type="button"
+                class="film-btn episode"
+                :aria-label="`Previous episode: ${prevEntry.name}`"
+                @click="goToEntry(prevEntry)"
+              >
+                ← Ep
+              </button>
+              <button type="button" class="film-btn play" :aria-label="playLabel" @click="togglePlay">
+                {{ playing ? '❚❚' : '▶' }}
+              </button>
+              <button
+                v-if="nextEntry"
+                type="button"
+                class="film-btn episode"
+                :aria-label="`Next episode: ${nextEntry.name}`"
+                @click="goToEntry(nextEntry)"
+              >
+                Ep →
+              </button>
+              <span class="film-time">
+                {{ formatTime(currentTime) }} / {{ formatTime(duration || mediaDuration()) }}
+              </span>
+            </div>
+
+            <div
+              class="film-progress"
+              role="slider"
+              tabindex="0"
+              :aria-valuemin="0"
+              :aria-valuemax="Math.floor(duration || mediaDuration() || 0)"
+              :aria-valuenow="Math.floor(currentTime)"
+              :aria-valuetext="`${formatTime(currentTime)} of ${formatTime(duration || mediaDuration())}`"
+              aria-label="Seek"
+              @click="onProgressClick"
+              @keydown="onFilmBarKeydown"
             >
-              −{{ SEEK_SECONDS }}s
-            </button>
-            <label class="film-scrub">
+              <div class="film-progress-fill" :style="{ width: progressPercent + '%' }" />
+            </div>
+
+            <div class="film-bar-row jumps">
+              <button
+                v-for="jump in backJumps"
+                :key="'back-' + jump"
+                type="button"
+                class="film-btn"
+                :aria-label="`Rewind ${formatJump(jump)}`"
+                @click="seekBy(-jump)"
+              >
+                −{{ formatJump(jump) }}
+              </button>
+              <button
+                type="button"
+                class="film-btn"
+                :aria-label="`Rewind ${SEEK_SECONDS} seconds`"
+                @click="seekBy(-SEEK_SECONDS)"
+              >
+                −{{ SEEK_SECONDS }}s
+              </button>
+              <button
+                type="button"
+                class="film-btn"
+                :aria-label="`Forward ${SEEK_SECONDS} seconds`"
+                @click="seekBy(SEEK_SECONDS)"
+              >
+                +{{ SEEK_SECONDS }}s
+              </button>
+              <button
+                v-for="jump in SEEK_JUMPS"
+                :key="'fwd-' + jump"
+                type="button"
+                class="film-btn"
+                :aria-label="`Forward ${formatJump(jump)}`"
+                @click="seekBy(jump)"
+              >
+                +{{ formatJump(jump) }}
+              </button>
+            </div>
+
+            <div class="film-bar-row marks">
+              <button type="button" class="film-btn mark" @click="seekToRatio(0)">Start</button>
+              <button type="button" class="film-btn mark" @click="seekToRatio(0.25)">25%</button>
+              <button type="button" class="film-btn mark" @click="seekToRatio(0.5)">50%</button>
+              <button type="button" class="film-btn mark" @click="seekToRatio(0.75)">75%</button>
+              <button
+                v-if="!isPlayStation"
+                type="button"
+                class="film-btn mark"
+                @click="toggleFullscreen"
+              >
+                Full
+              </button>
+            </div>
+
+            <label v-if="!isPlayStation" class="film-scrub desktop-only">
               <span class="sr-only">Seek</span>
               <input
                 type="range"
                 min="0"
                 step="0.1"
-                :max="duration || 0"
+                :max="duration || mediaDuration() || 0"
                 :value="currentTime"
                 :style="{ '--progress': progressPercent + '%' }"
-                :aria-valuetext="`${formatTime(currentTime)} of ${formatTime(duration)}`"
+                :aria-valuetext="`${formatTime(currentTime)} of ${formatTime(duration || mediaDuration())}`"
                 @input="onSeekInput"
               />
             </label>
-            <button
-              type="button"
-              class="film-btn"
-              :aria-label="`Forward ${SEEK_SECONDS} seconds`"
-              @click="seekBy(SEEK_SECONDS)"
-            >
-              +{{ SEEK_SECONDS }}s
-            </button>
-            <span class="film-time" aria-hidden="true">
-              {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
-            </span>
           </div>
         </template>
         <div v-else class="waiting" :style="{ backgroundImage: `url(${film.poster_url})` }">
@@ -655,13 +852,29 @@ video,
 
 .film-bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
   gap: 0.55rem;
-  padding: 0.75rem 0.85rem;
+  padding: 0.75rem 0.85rem 0.9rem;
   background: #1a1410;
   border-top: 2px solid var(--brown);
   border-radius: 0 0 0.75rem 0.75rem;
+}
+
+.film-bar:focus {
+  outline: 3px solid var(--accent-yellow);
+  outline-offset: 2px;
+}
+
+.film-bar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.film-bar-row.jumps,
+.film-bar-row.marks {
+  justify-content: center;
 }
 
 .film-btn {
@@ -677,9 +890,58 @@ video,
   font-size: 0.9rem;
 }
 
+.film-btn.play {
+  min-width: 3.6rem;
+  background: #c65f20;
+}
+
+.film-btn.episode {
+  background: #4a2a78;
+}
+
+.film-btn.mark {
+  background: #2a221c;
+  border-color: #6a5648;
+  font-size: 0.85rem;
+}
+
 .film-btn:focus {
   outline: 3px solid var(--accent-yellow);
   outline-offset: 2px;
+}
+
+.film-progress {
+  position: relative;
+  width: 100%;
+  height: 1.6rem;
+  border-radius: 999px;
+  background: #4a3b32;
+  border: 2px solid #6a5648;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.film-progress:focus {
+  outline: 3px solid var(--accent-yellow);
+  outline-offset: 2px;
+}
+
+.film-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  width: 0;
+}
+
+.film-time {
+  margin-left: auto;
+  flex: 0 0 auto;
+  min-width: 6.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--cream);
+  font-size: 0.95rem;
+  text-align: right;
 }
 
 .film-scrub {
@@ -687,6 +949,7 @@ video,
   min-width: 8rem;
   display: flex;
   align-items: center;
+  width: 100%;
 }
 
 .film-scrub input[type='range'] {
@@ -753,18 +1016,8 @@ video,
   font-size: 1rem;
 }
 
-.player-shell.console .film-scrub input[type='range'] {
+.player-shell.console .film-progress {
   height: 2rem;
-}
-
-.player-shell.console .film-scrub input[type='range']::-webkit-slider-runnable-track {
-  height: 0.75rem;
-}
-
-.player-shell.console .film-scrub input[type='range']::-webkit-slider-thumb {
-  width: 1.7rem;
-  height: 1.7rem;
-  margin-top: -0.45rem;
 }
 
 .player-shell.console .film-time {
