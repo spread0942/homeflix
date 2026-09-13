@@ -9,7 +9,7 @@
   --bg: #0a100d;
   --foam: rgba(255, 255, 255, 0.92);
   --shadow: rgba(10, 16, 13, 0.45);
-  --font-display: 'Fraunces', Georgia, serif;
+  --font-display: 'Nunito', system-ui, sans-serif;
   --font-body: 'Nunito', system-ui, sans-serif;
 }
 
@@ -34,6 +34,12 @@ body {
     radial-gradient(ellipse 80% 50% at 50% 100%, rgba(111, 52, 173, 0.2), transparent 55%),
     linear-gradient(180deg, #121a16 0%, #0a100d 45%, #080c0a 100%);
   background-attachment: fixed;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
 }
 
 body::before {

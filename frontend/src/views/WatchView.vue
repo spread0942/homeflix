@@ -771,6 +771,7 @@ video,
 }
 
 .nav-title {
+  font-family: var(--font-display);
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -874,6 +875,7 @@ video,
 }
 
 .ep-name {
+  font-family: var(--font-display);
   font-weight: 700;
   flex: 1;
   min-width: 0;

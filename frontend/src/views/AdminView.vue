@@ -764,6 +764,10 @@ select {
   overflow: hidden;
 }
 
+.list strong {
+  font-family: var(--font-display);
+}
+
 .actions {
   display: flex;
   flex-direction: column;
