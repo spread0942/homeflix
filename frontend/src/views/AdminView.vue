@@ -71,18 +71,55 @@ function onSeriesPosterChange(e) {
   seriesPosterFile.value = e.target.files?.[0] || null
 }
 
+/** Prefill season / next episode / sort from existing series entries. */
+function applySeriesDefaults(id) {
+  if (!id) {
+    season.value = ''
+    episode.value = ''
+    sortOrder.value = '0'
+    return
+  }
+  const entries = films.value.filter((f) => f.series_id === id)
+  sortOrder.value = String(entries.length + 1)
+
+  const seasons = entries.map((f) => f.season).filter((s) => s != null)
+  if (seasons.length) {
+    const lastSeason = Math.max(...seasons)
+    season.value = String(lastSeason)
+    const epsInSeason = entries
+      .filter((f) => f.season === lastSeason)
+      .map((f) => f.episode)
+      .filter((e) => e != null)
+    episode.value = String(epsInSeason.length ? Math.max(...epsInSeason) + 1 : 1)
+    return
+  }
+
+  const kind = seriesList.value.find((s) => s.id === id)?.kind
+  if (kind === 'anime' || kind === 'tv') {
+    season.value = '1'
+    episode.value = '1'
+  } else {
+    // Franchise / unknown: leave season & episode blank; sort is enough.
+    season.value = ''
+    episode.value = ''
+  }
+}
+
+function onSeriesChange(e) {
+  if (editingFilmId.value) return
+  applySeriesDefaults(e.target.value)
+}
+
 function resetFilmForm(keepSeries = '') {
   editingFilmId.value = null
   name.value = ''
   description.value = ''
   seriesId.value = keepSeries
-  season.value = ''
-  episode.value = ''
-  sortOrder.value = '0'
   videoFile.value = null
   posterFile.value = null
   if (filmFormEl.value) filmFormEl.value.reset()
   seriesId.value = keepSeries
+  applySeriesDefaults(keepSeries)
 }
 
 function resetSeriesForm() {
@@ -163,6 +200,7 @@ async function onCreateSeries(e) {
       success.value = `Series "${created.name}" created.`
       resetSeriesForm()
       seriesId.value = created.id
+      if (!editingFilmId.value) applySeriesDefaults(created.id)
     }
     await refresh()
   } catch (err) {
@@ -207,14 +245,18 @@ async function onSubmit(e) {
     if (editingFilm.value) {
       await updateAnimation(editingFilmId.value, form)
       success.value = `"${name.value.trim()}" updated.`
-      resetFilmForm(seriesId.value)
+      const keepSeries = seriesId.value
+      resetFilmForm(keepSeries)
+      await refresh()
+      applySeriesDefaults(keepSeries)
     } else {
       await createAnimation(form)
       success.value = `"${name.value.trim()}" uploaded.`
       const keepSeries = seriesId.value
       resetFilmForm(keepSeries)
+      await refresh()
+      applySeriesDefaults(keepSeries)
     }
-    await refresh()
   } catch (err) {
     error.value = err.message
   } finally {
@@ -325,7 +367,7 @@ function seriesSubmitLabel() {
         </label>
         <label>
           Series (optional)
-          <select v-model="seriesId">
+          <select v-model="seriesId" @change="onSeriesChange">
             <option value="">Standalone — no series</option>
             <option v-for="s in seriesList" :key="s.id" :value="s.id">
               {{ s.name }} ({{ s.entry_count }})
