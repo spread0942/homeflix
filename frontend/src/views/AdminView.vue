@@ -59,8 +59,19 @@ async function refresh() {
 
 onMounted(refresh)
 
+function titleFromFilename(filename) {
+  const base = filename.replace(/\.[^.]+$/, '')
+  const spaced = base.replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!spaced) return ''
+  const lower = spaced.toLowerCase()
+  return lower.charAt(0).toUpperCase() + lower.slice(1)
+}
+
 function onVideoChange(e) {
   videoFile.value = e.target.files?.[0] || null
+  if (!videoFile.value || editingFilm.value) return
+  const fromFile = titleFromFilename(videoFile.value.name)
+  if (fromFile) name.value = fromFile
 }
 
 function onPosterChange(e) {
