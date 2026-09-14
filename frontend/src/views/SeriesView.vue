@@ -31,8 +31,29 @@ watch(() => props.id, load)
 
 const seasons = computed(() => groupBySeason(series.value?.entries || []))
 
+const selectedSeasonKey = ref('')
+
+watch(
+  seasons,
+  (groups) => {
+    if (!groups.length) {
+      selectedSeasonKey.value = ''
+      return
+    }
+    if (!groups.some((g) => g.key === selectedSeasonKey.value)) {
+      selectedSeasonKey.value = groups[0].key
+    }
+  },
+  { immediate: true },
+)
+
+const activeSeason = computed(
+  () => seasons.value.find((g) => g.key === selectedSeasonKey.value) || seasons.value[0] || null,
+)
+
 const firstPlayable = computed(() => {
-  return (series.value?.entries || []).find(isPlayable) || series.value?.entries?.[0] || null
+  const inSeason = activeSeason.value?.entries || []
+  return inSeason.find(isPlayable) || inSeason[0] || null
 })
 
 function openFilm(id) {
@@ -76,10 +97,20 @@ function playSeries() {
         No entries yet. Add films to this series in <RouterLink to="/admin">Admin</RouterLink>.
       </div>
 
-      <div v-for="group in seasons" :key="group.key" class="season">
-        <h2>{{ group.label }}</h2>
+      <template v-else-if="activeSeason">
+        <div class="season-bar">
+          <label v-if="seasons.length > 1" class="season-pick">
+            Season
+            <select v-model="selectedSeasonKey" aria-label="Select season">
+              <option v-for="group in seasons" :key="group.key" :value="group.key">
+                {{ group.label }} ({{ group.entries.length }})
+              </option>
+            </select>
+          </label>
+          <h2 v-else>{{ activeSeason.label }}</h2>
+        </div>
         <ul class="list">
-          <li v-for="entry in group.entries" :key="entry.id">
+          <li v-for="entry in activeSeason.entries" :key="entry.id">
             <button type="button" class="row" @click="openFilm(entry.id)">
               <img :src="entry.poster_url" :alt="entry.name" />
               <div class="meta">
@@ -90,7 +121,7 @@ function playSeries() {
             </button>
           </li>
         </ul>
-      </div>
+      </template>
     </template>
   </section>
 </template>
@@ -197,10 +228,33 @@ function playSeries() {
   margin-bottom: 2rem;
 }
 
-.season h2 {
+.season h2,
+.season-bar h2 {
   margin: 0 0 0.85rem;
   font-family: var(--font-display);
   color: var(--cream);
+}
+
+.season-bar {
+  margin-bottom: 0.85rem;
+}
+
+.season-pick {
+  display: grid;
+  gap: 0.4rem;
+  max-width: 18rem;
+  font-weight: 700;
+  color: var(--cream);
+}
+
+.season-pick select {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border: 2px solid color-mix(in srgb, var(--brown) 40%, transparent);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--cream) 92%, transparent);
+  color: var(--on-light);
+  font-weight: 700;
 }
 
 .list {
