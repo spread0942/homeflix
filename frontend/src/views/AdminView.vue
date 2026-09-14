@@ -35,6 +35,9 @@ const filmFormEl = ref(null)
 const batchItems = ref([])
 const batchSeriesId = ref('')
 const batchSeason = ref('')
+const batchFind = ref('')
+const batchReplace = ref('')
+const batchUseRegex = ref(false)
 const batchFileInput = ref(null)
 /** Entries uploaded this session but not yet in `films` (for episode defaults). */
 const sessionExtras = ref([])
@@ -54,6 +57,23 @@ const pendingBatchCount = computed(
   () => batchItems.value.filter((r) => r.status === 'pending' || r.status === 'error').length,
 )
 const batchBusy = computed(() => batchItems.value.some((r) => r.status === 'uploading'))
+
+const batchReplacePreview = computed(() => {
+  const find = batchFind.value
+  if (!find || !batchItems.value.length) {
+    return { error: null, items: [] }
+  }
+  const tool = makeTitleReplacer(find, batchReplace.value, batchUseRegex.value)
+  if (tool.error) return { error: tool.error, items: [] }
+  const items = []
+  for (const row of batchItems.value) {
+    if (row.status === 'uploading' || row.status === 'done') continue
+    const after = tool.apply(row.name)
+    if (after === row.name) continue
+    items.push({ key: row.key, before: row.name, after })
+  }
+  return { error: null, items }
+})
 
 async function refresh() {
   loading.value = true
@@ -202,6 +222,54 @@ function applyBatchSeriesToAll() {
     row.episode = d.episode
     row.sortOrder = d.sortOrder
     if (id) extras.push({ season: d.season, episode: d.episode, sortOrder: d.sortOrder })
+  }
+}
+
+function applyBatchFindReplace() {
+  const find = batchFind.value
+  if (!find) {
+    error.value = 'Enter text to find before replacing.'
+    return
+  }
+  const tool = makeTitleReplacer(find, batchReplace.value, batchUseRegex.value)
+  if (tool.error) {
+    error.value = `Invalid regex: ${tool.error}`
+    return
+  }
+  let changed = 0
+  for (const row of batchItems.value) {
+    if (row.status === 'uploading' || row.status === 'done') continue
+    const next = tool.apply(row.name)
+    if (next === row.name) continue
+    row.name = next
+    changed += 1
+  }
+  error.value = ''
+  success.value = changed
+    ? `Updated ${changed} title${changed === 1 ? '' : 's'}.`
+    : 'No titles matched.'
+}
+
+function makeTitleReplacer(find, replace, useRegex) {
+  if (useRegex) {
+    try {
+      const re = new RegExp(find, 'g')
+      return {
+        error: null,
+        apply(text) {
+          re.lastIndex = 0
+          return text.replace(re, replace)
+        },
+      }
+    } catch (e) {
+      return { error: e.message, apply: (t) => t }
+    }
+  }
+  return {
+    error: null,
+    apply(text) {
+      return text.split(find).join(replace)
+    },
   }
 }
 
@@ -681,6 +749,63 @@ function rowStatusLabel(row) {
           >
             Apply to all
           </button>
+        </div>
+
+        <div class="batch-replace">
+          <label>
+            Find in titles
+            <input
+              v-model="batchFind"
+              type="text"
+              :placeholder="batchUseRegex ? 'e.g. ^S\\d+E\\d+\\s*' : 'text to find'"
+              :disabled="batchBusy || !batchItems.length"
+              @keydown.enter.prevent="applyBatchFindReplace"
+            />
+          </label>
+          <label>
+            Replace with
+            <input
+              v-model="batchReplace"
+              type="text"
+              :placeholder="batchUseRegex ? 'replacement ($1, $2… ok)' : 'replacement (can be empty)'"
+              :disabled="batchBusy || !batchItems.length"
+              @keydown.enter.prevent="applyBatchFindReplace"
+            />
+          </label>
+          <label class="regex-toggle">
+            <input v-model="batchUseRegex" type="checkbox" :disabled="batchBusy || !batchItems.length" />
+            Regex
+          </label>
+          <button
+            type="button"
+            class="cancel"
+            :disabled="batchBusy || !batchItems.length || !batchFind || !!batchReplacePreview.error"
+            @click="applyBatchFindReplace"
+          >
+            Replace in all
+          </button>
+        </div>
+
+        <div v-if="batchFind && batchItems.length" class="replace-preview">
+          <p v-if="batchReplacePreview.error" class="preview-error">
+            Invalid regex: {{ batchReplacePreview.error }}
+          </p>
+          <template v-else>
+            <p class="preview-summary">
+              {{
+                batchReplacePreview.items.length
+                  ? `${batchReplacePreview.items.length} title${batchReplacePreview.items.length === 1 ? '' : 's'} would change`
+                  : 'No titles would change'
+              }}
+            </p>
+            <ul v-if="batchReplacePreview.items.length" class="preview-list">
+              <li v-for="item in batchReplacePreview.items" :key="item.key">
+                <span class="preview-before" :title="item.before">{{ item.before }}</span>
+                <span class="preview-arrow" aria-hidden="true">→</span>
+                <span class="preview-after" :title="item.after">{{ item.after || '(empty)' }}</span>
+              </li>
+            </ul>
+          </template>
         </div>
 
         <div v-if="batchItems.length" class="batch-table-wrap">
@@ -1178,6 +1303,102 @@ select {
 
 .batch-season input {
   max-width: 6.5rem;
+}
+
+.batch-replace {
+  display: grid;
+  gap: 0.85rem;
+  align-items: end;
+}
+
+@media (min-width: 720px) {
+  .batch-replace {
+    grid-template-columns: 1fr 1fr auto auto;
+  }
+}
+
+.regex-toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem;
+  padding-bottom: 0.55rem;
+  font-weight: 700;
+  color: var(--brown);
+  white-space: nowrap;
+}
+
+.regex-toggle input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.replace-preview {
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--cream) 75%, #fff);
+  border: 1px dashed color-mix(in srgb, var(--brown) 30%, transparent);
+}
+
+.preview-summary {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--brown);
+}
+
+.preview-error {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #8b1e1e;
+}
+
+.preview-list {
+  list-style: none;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.preview-list li {
+  display: grid;
+  gap: 0.15rem 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--brown) 12%, transparent);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.preview-list li:last-child {
+  border-bottom: none;
+}
+
+.preview-before {
+  color: color-mix(in srgb, var(--on-light) 55%, transparent);
+  text-decoration: line-through;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.preview-arrow {
+  display: none;
+}
+
+.preview-after {
+  color: var(--brown);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.preview-after::before {
+  content: '→ ';
+  color: var(--teal);
+  font-weight: 800;
 }
 
 .batch-empty {
