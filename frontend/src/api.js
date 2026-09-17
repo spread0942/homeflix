@@ -72,3 +72,19 @@ export function updateAnimation(id, formData) {
 export function transcodeAnimation(id) {
   return request(`/animations/${id}/transcode`, { method: 'POST' })
 }
+
+export function getProgress(id) {
+  return request(`/progress/${id}`)
+}
+
+export function putProgress(id, body) {
+  return request(`/progress/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+export function listContinueWatching() {
+  return request('/continue-watching')
+}

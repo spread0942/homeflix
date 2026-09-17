@@ -53,6 +53,10 @@ func (a *API) Routes() chi.Router {
 	r.Get("/animations/{id}/poster", a.ServePoster)
 	r.Get("/animations/{id}/stream", a.StreamVideo)
 
+	r.Get("/continue-watching", a.ContinueWatching)
+	r.Get("/progress/{id}", a.GetProgress)
+	r.Put("/progress/{id}", a.PutProgress)
+
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -66,6 +70,87 @@ func (a *API) Library(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
+}
+
+func (a *API) ContinueWatching(w http.ResponseWriter, r *http.Request) {
+	items, err := a.Store.ListContinueWatching(r.Context(), 12)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load continue watching")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (a *API) GetProgress(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	p, err := a.Store.GetProgress(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get progress")
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+type putProgressBody struct {
+	PositionSeconds float64 `json:"position_seconds"`
+	DurationSeconds float64 `json:"duration_seconds"`
+	Completed       *bool   `json:"completed"`
+}
+
+func (a *API) PutProgress(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if _, err := a.Store.Get(r.Context(), id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load animation")
+		return
+	}
+
+	var body putProgressBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if body.PositionSeconds < 0 {
+		body.PositionSeconds = 0
+	}
+	if body.DurationSeconds < 0 {
+		body.DurationSeconds = 0
+	}
+
+	completed := false
+	if body.Completed != nil {
+		completed = *body.Completed
+	}
+	if !completed && models.ProgressNearEnd(body.PositionSeconds, body.DurationSeconds) {
+		completed = true
+	}
+
+	p := &models.WatchProgress{
+		AnimationID:     id,
+		PositionSeconds: body.PositionSeconds,
+		DurationSeconds: body.DurationSeconds,
+		Completed:       completed,
+	}
+	if err := a.Store.UpsertProgress(r.Context(), p); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save progress")
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
 }
 
 func (a *API) ListSeries(w http.ResponseWriter, r *http.Request) {

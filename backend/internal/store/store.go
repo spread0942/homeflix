@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -413,6 +414,198 @@ func applySeriesPoster(ser *models.Series, fallback *string) {
 	if fallback != nil && *fallback != "" {
 		ser.PosterURL = "/api/series/" + ser.ID.String() + "/poster"
 	}
+}
+
+func (s *Store) GetProgress(ctx context.Context, animationID uuid.UUID) (*models.WatchProgress, error) {
+	var p models.WatchProgress
+	err := s.pool.QueryRow(ctx, `
+		SELECT animation_id, position_seconds, duration_seconds, completed, updated_at
+		FROM watch_progress WHERE animation_id = $1`, animationID).
+		Scan(&p.AnimationID, &p.PositionSeconds, &p.DurationSeconds, &p.Completed, &p.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (s *Store) UpsertProgress(ctx context.Context, p *models.WatchProgress) error {
+	return s.pool.QueryRow(ctx, `
+		INSERT INTO watch_progress (animation_id, position_seconds, duration_seconds, completed, updated_at)
+		VALUES ($1, $2, $3, $4, now())
+		ON CONFLICT (animation_id) DO UPDATE SET
+			position_seconds = EXCLUDED.position_seconds,
+			duration_seconds = EXCLUDED.duration_seconds,
+			completed = EXCLUDED.completed,
+			updated_at = now()
+		RETURNING updated_at`,
+		p.AnimationID, p.PositionSeconds, p.DurationSeconds, p.Completed,
+	).Scan(&p.UpdatedAt)
+}
+
+type progressRow struct {
+	progress     models.WatchProgress
+	name         string
+	posterPath   string
+	status       string
+	seriesID     *uuid.UUID
+	seriesName   string
+	seriesPoster *string
+	season       *int
+	episode      *int
+	sortOrder    int
+}
+
+func (s *Store) ListContinueWatching(ctx context.Context, limit int) ([]models.ContinueWatchingItem, error) {
+	if limit <= 0 {
+		limit = 12
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT
+			wp.animation_id, wp.position_seconds, wp.duration_seconds, wp.completed, wp.updated_at,
+			a.name, a.poster_path, a.playback_status, a.series_id, a.season, a.episode, a.sort_order,
+			COALESCE(s.name, ''), s.poster_path
+		FROM watch_progress wp
+		JOIN animations a ON a.id = wp.animation_id
+		LEFT JOIN series s ON s.id = a.series_id
+		ORDER BY wp.updated_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rowsData []progressRow
+	for rows.Next() {
+		var r progressRow
+		if err := rows.Scan(
+			&r.progress.AnimationID, &r.progress.PositionSeconds, &r.progress.DurationSeconds,
+			&r.progress.Completed, &r.progress.UpdatedAt,
+			&r.name, &r.posterPath, &r.status, &r.seriesID, &r.season, &r.episode, &r.sortOrder,
+			&r.seriesName, &r.seriesPoster,
+		); err != nil {
+			return nil, err
+		}
+		rowsData = append(rowsData, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]bool)
+	out := make([]models.ContinueWatchingItem, 0, limit)
+	seriesCache := make(map[uuid.UUID][]models.Animation)
+
+	for _, r := range rowsData {
+		key := "film:" + r.progress.AnimationID.String()
+		if r.seriesID != nil {
+			key = "series:" + r.seriesID.String()
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		if r.seriesID == nil {
+			if r.progress.Completed {
+				continue
+			}
+			out = append(out, continueItemFromRow(r, false))
+		} else if r.progress.Completed {
+			entries, ok := seriesCache[*r.seriesID]
+			if !ok {
+				entries, err = s.ListBySeries(ctx, *r.seriesID)
+				if err != nil {
+					return nil, err
+				}
+				seriesCache[*r.seriesID] = entries
+			}
+			next := nextPlayableAfter(entries, r.progress.AnimationID)
+			if next != nil {
+				item := continueItemFromAnimation(next, r.seriesName, r.seriesPoster, r.progress.UpdatedAt)
+				out = append(out, item)
+			} else {
+				item := continueItemFromRow(r, true)
+				out = append(out, item)
+			}
+		} else {
+			out = append(out, continueItemFromRow(r, false))
+		}
+
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func nextPlayableAfter(entries []models.Animation, currentID uuid.UUID) *models.Animation {
+	idx := -1
+	for i := range entries {
+		if entries[i].ID == currentID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return nil
+	}
+	for j := idx + 1; j < len(entries); j++ {
+		if entries[j].PlaybackStatus == "ready" {
+			return &entries[j]
+		}
+	}
+	return nil
+}
+
+func continueItemFromRow(r progressRow, seriesComplete bool) models.ContinueWatchingItem {
+	item := models.ContinueWatchingItem{
+		AnimationID:     r.progress.AnimationID,
+		Name:            r.name,
+		PositionSeconds: r.progress.PositionSeconds,
+		DurationSeconds: r.progress.DurationSeconds,
+		Completed:       r.progress.Completed,
+		UpdatedAt:       r.progress.UpdatedAt,
+		SeriesID:        r.seriesID,
+		SeriesName:      r.seriesName,
+		Season:          r.season,
+		Episode:         r.episode,
+		EntryLabel:      models.EntryLabel(r.season, r.episode, r.sortOrder),
+		SeriesComplete:  seriesComplete,
+	}
+	item.PosterURL = continuePosterURL(r.seriesID, r.seriesPoster, r.progress.AnimationID, r.posterPath)
+	return item
+}
+
+func continueItemFromAnimation(a *models.Animation, seriesName string, seriesPoster *string, updatedAt time.Time) models.ContinueWatchingItem {
+	item := models.ContinueWatchingItem{
+		AnimationID:     a.ID,
+		Name:            a.Name,
+		PositionSeconds: 0,
+		DurationSeconds: 0,
+		Completed:       false,
+		UpdatedAt:       updatedAt,
+		SeriesID:        a.SeriesID,
+		SeriesName:      seriesName,
+		Season:          a.Season,
+		Episode:         a.Episode,
+		EntryLabel:      models.EntryLabel(a.Season, a.Episode, a.SortOrder),
+		SeriesComplete:  false,
+	}
+	item.PosterURL = continuePosterURL(a.SeriesID, seriesPoster, a.ID, a.PosterPath)
+	return item
+}
+
+func continuePosterURL(seriesID *uuid.UUID, seriesPoster *string, animationID uuid.UUID, animPoster string) string {
+	if seriesID != nil && seriesPoster != nil && *seriesPoster != "" {
+		return "/api/series/" + seriesID.String() + "/poster"
+	}
+	if seriesID != nil && animPoster != "" {
+		// series may use first-entry fallback via series poster endpoint
+		return "/api/series/" + seriesID.String() + "/poster"
+	}
+	if animPoster != "" {
+		return "/api/animations/" + animationID.String() + "/poster"
+	}
+	return ""
 }
 
 // SeriesPosterFile returns the absolute-relative poster path for a series (own or first entry).

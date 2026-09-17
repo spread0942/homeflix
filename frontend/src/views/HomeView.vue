@@ -1,14 +1,24 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { listLibrary } from '../api'
+import { listContinueWatching, listLibrary } from '../api'
+import { entryLabel } from '../lib/seriesNav'
 
 const router = useRouter()
 const query = ref('')
 const items = ref([])
+const continueItems = ref([])
 const loading = ref(true)
 const error = ref('')
 let debounceTimer
+
+async function loadContinue() {
+  try {
+    continueItems.value = await listContinueWatching()
+  } catch {
+    continueItems.value = []
+  }
+}
 
 async function load() {
   loading.value = true
@@ -22,6 +32,8 @@ async function load() {
     loading.value = false
   }
 }
+
+onMounted(loadContinue)
 
 watch(
   query,
@@ -38,6 +50,32 @@ function openItem(item) {
   } else {
     router.push({ name: 'watch', params: { id: item.id } })
   }
+}
+
+function openContinue(item) {
+  if (item.series_complete && item.series_id) {
+    router.push({ name: 'series', params: { id: item.series_id } })
+    return
+  }
+  router.push({ name: 'watch', params: { id: item.animation_id } })
+}
+
+function continueTitle(item) {
+  return item.series_name || item.name
+}
+
+function continueSubtitle(item) {
+  if (item.series_complete) return 'Series complete'
+  const label = item.entry_label || entryLabel(item)
+  if (item.series_name && label) return label
+  if (item.series_name) return item.name
+  return label || 'Continue watching'
+}
+
+function progressPercent(item) {
+  if (item.series_complete) return 100
+  if (!item.duration_seconds) return 0
+  return Math.min(100, Math.max(0, (item.position_seconds / item.duration_seconds) * 100))
 }
 
 function subtitle(item) {
@@ -66,6 +104,38 @@ function subtitle(item) {
         />
       </label>
     </div>
+
+    <section v-if="continueItems.length && !query" class="continue" aria-label="Continue watching">
+      <h2>Continue watching</h2>
+      <ul class="continue-row">
+        <li v-for="item in continueItems" :key="`${item.series_id || 'film'}-${item.animation_id}`">
+          <button class="continue-card" type="button" @click="openContinue(item)">
+            <div class="poster-wrap">
+              <img
+                v-if="item.poster_url"
+                :src="item.poster_url"
+                :alt="continueTitle(item)"
+                loading="lazy"
+              />
+              <div v-else class="poster-fallback" aria-hidden="true">▶</div>
+              <span v-if="item.series_complete" class="badge done">Complete</span>
+              <span v-else-if="item.series_id" class="badge">Series</span>
+              <div
+                v-if="!item.series_complete"
+                class="progress-track"
+                aria-hidden="true"
+              >
+                <div class="progress-fill" :style="{ width: `${progressPercent(item)}%` }" />
+              </div>
+            </div>
+            <div class="meta">
+              <h3>{{ continueTitle(item) }}</h3>
+              <p>{{ continueSubtitle(item) }}</p>
+            </div>
+          </button>
+        </li>
+      </ul>
+    </section>
 
     <div class="library">
       <div v-if="loading" class="state">Loading library…</div>
@@ -155,6 +225,49 @@ function subtitle(item) {
   box-shadow: 0 12px 28px var(--shadow);
 }
 
+.continue {
+  margin: 0 0 2rem;
+  animation: fadeRise 0.75s ease 0.06s both;
+}
+
+.continue h2 {
+  margin: 0 0 0.85rem;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--cream);
+}
+
+.continue-row {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0.35rem;
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+}
+
+.continue-row > li {
+  flex: 0 0 min(160px, 42vw);
+  scroll-snap-align: start;
+}
+
+.continue-card {
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+  transition: transform 0.25s ease;
+}
+
+.continue-card:hover,
+.continue-card:focus-visible {
+  transform: translateY(-4px);
+  outline: none;
+}
+
 .library {
   animation: fadeRise 0.8s ease 0.12s both;
 }
@@ -223,7 +336,8 @@ function subtitle(item) {
   color: var(--cream);
 }
 
-.card:hover .poster-wrap img {
+.card:hover .poster-wrap img,
+.continue-card:hover .poster-wrap img {
   transform: scale(1.05);
 }
 
@@ -241,15 +355,38 @@ function subtitle(item) {
   color: var(--cream);
 }
 
+.badge.done {
+  background: var(--teal);
+}
+
+.progress-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent-yellow);
+}
+
 .meta {
   padding: 0.75rem 0.15rem 0;
 }
 
-.meta h2 {
+.meta h2,
+.meta h3 {
   margin: 0;
   font-family: var(--font-display);
   font-size: 1.15rem;
   color: var(--cream);
+}
+
+.meta h3 {
+  font-size: 1.05rem;
 }
 
 .meta p {

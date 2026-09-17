@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { getAnimation, getSeries } from '../api'
+import { getAnimation, getProgress, getSeries, putProgress } from '../api'
 import {
   entryLabel,
   groupBySeason,
@@ -27,8 +27,11 @@ const seekFlash = ref('') // 'back' | 'fwd' | ''
 const episodesOpen = ref(false)
 const upNextVisible = ref(false)
 const upNextSeconds = ref(0)
+const seriesCompleteVisible = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
+const resumePosition = ref(0)
+const progressHint = ref(null) // { position_seconds, duration_seconds, completed }
 const isPlayStation = /PlayStation/i.test(
   typeof navigator !== 'undefined' ? navigator.userAgent : '',
 )
@@ -36,11 +39,15 @@ let pollTimer
 let hideTimer
 let flashTimer
 let upNextTimer
+let lastProgressSave = 0
+let resumeApplied = false
 
 const SEEK_SECONDS = 10
 const SEEK_JUMPS = [30, 60]
 const backJumps = [60, 30]
 const UP_NEXT_COUNTDOWN = 8
+const PROGRESS_SAVE_MS = 10000
+const RESUME_MIN_SECONDS = 5
 
 const playLabel = computed(() => (playing.value ? 'Pause' : 'Play'))
 const progressPercent = computed(() => {
@@ -112,7 +119,12 @@ async function load() {
   playing.value = false
   currentTime.value = 0
   duration.value = 0
+  resumePosition.value = 0
+  progressHint.value = null
+  resumeApplied = false
+  lastProgressSave = 0
   cancelUpNext()
+  seriesCompleteVisible.value = false
   try {
     film.value = await getAnimation(props.id)
     if (film.value.series_id) {
@@ -121,6 +133,15 @@ async function load() {
       } catch {
         series.value = null
       }
+    }
+    try {
+      const p = await getProgress(props.id)
+      progressHint.value = p
+      if (!p.completed && p.position_seconds >= RESUME_MIN_SECONDS) {
+        resumePosition.value = p.position_seconds
+      }
+    } catch {
+      /* no saved progress */
     }
     maybePoll()
     await nextTick()
@@ -135,6 +156,7 @@ async function load() {
 function goToEntry(entry) {
   if (!entry) return
   cancelUpNext()
+  seriesCompleteVisible.value = false
   router.push({ name: 'watch', params: { id: entry.id } })
 }
 
@@ -146,7 +168,13 @@ function cancelUpNext() {
 
 function startUpNextCountdown() {
   const next = nextPlayable.value
-  if (!next) return
+  if (!next) {
+    if (film.value?.series_id) {
+      seriesCompleteVisible.value = true
+    }
+    return
+  }
+  seriesCompleteVisible.value = false
   upNextVisible.value = true
   upNextSeconds.value = UP_NEXT_COUNTDOWN
   clearInterval(upNextTimer)
@@ -157,6 +185,47 @@ function startUpNextCountdown() {
       goToEntry(next)
     }
   }, 1000)
+}
+
+function dismissSeriesComplete() {
+  seriesCompleteVisible.value = false
+}
+
+async function saveProgress({ completed = false, force = false } = {}) {
+  if (!film.value || film.value.playback_status !== 'ready') return
+  const v = videoEl.value
+  const pos = v ? v.currentTime || 0 : currentTime.value || 0
+  const dur = v ? mediaDuration() : duration.value || 0
+  if (!force && pos < 1 && !completed) return
+  const now = Date.now()
+  if (!force && !completed && now - lastProgressSave < PROGRESS_SAVE_MS) return
+  lastProgressSave = now
+  try {
+    const saved = await putProgress(film.value.id, {
+      position_seconds: completed ? dur || pos : pos,
+      duration_seconds: dur,
+      completed,
+    })
+    progressHint.value = saved
+  } catch {
+    /* ignore transient save errors */
+  }
+}
+
+function applyResumeSeek() {
+  if (resumeApplied) return
+  const v = videoEl.value
+  const pos = resumePosition.value
+  if (!v || !(pos >= RESUME_MIN_SECONDS)) return
+  const dur = Number.isFinite(v.duration) ? v.duration : 0
+  if (dur > 0 && pos >= dur - 2) return
+  try {
+    v.currentTime = pos
+    currentTime.value = pos
+    resumeApplied = true
+  } catch {
+    /* seek may fail until more data is buffered */
+  }
 }
 
 function maybePoll() {
@@ -192,20 +261,53 @@ function bindVideoEvents() {
   v.onpause = () => {
     playing.value = false
     showOverlay(true)
+    saveProgress({ force: true })
   }
   v.onended = () => {
     playing.value = false
     showOverlay(true)
+    saveProgress({ completed: true, force: true })
     startUpNextCountdown()
   }
   v.ontimeupdate = () => {
     currentTime.value = v.currentTime || 0
+    saveProgress()
   }
   v.ondurationchange = () => {
     duration.value = Number.isFinite(v.duration) ? v.duration : 0
   }
   v.onloadedmetadata = () => {
     duration.value = Number.isFinite(v.duration) ? v.duration : 0
+    applyResumeSeek()
+  }
+}
+
+function onVisibilityFlush() {
+  if (document.visibilityState === 'hidden') {
+    saveProgress({ force: true })
+  }
+}
+
+function onPageHide() {
+  if (!film.value || film.value.playback_status !== 'ready') return
+  const v = videoEl.value
+  const pos = v ? v.currentTime || 0 : currentTime.value || 0
+  const dur = v ? mediaDuration() : duration.value || 0
+  if (pos < 1) return
+  const body = JSON.stringify({
+    position_seconds: pos,
+    duration_seconds: dur,
+    completed: false,
+  })
+  try {
+    fetch(`/api/progress/${film.value.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      keepalive: true,
+    })
+  } catch {
+    /* ignore */
   }
 }
 
@@ -267,7 +369,7 @@ function seekBy(delta) {
   const total = mediaDuration()
   const now = Number.isFinite(v.currentTime) ? v.currentTime : 0
   let next = total > 0 ? Math.min(Math.max(0, now + delta), total) : Math.max(0, now + delta)
-  next = clampToSeekable(next)
+  if (isPlayStation) next = clampToSeekable(next)
   try {
     v.currentTime = next
     currentTime.value = v.currentTime || next
@@ -283,7 +385,7 @@ function seekToRatio(ratio) {
   const total = mediaDuration()
   if (!v || total <= 0) return
   let next = Math.min(Math.max(0, total * ratio), total)
-  next = clampToSeekable(next)
+  if (isPlayStation) next = clampToSeekable(next)
   try {
     v.currentTime = next
     currentTime.value = v.currentTime || next
@@ -323,28 +425,33 @@ function clampToSeekable(time) {
   }
 }
 
-function onSeekInput(e) {
-  const v = videoEl.value
+function seekFromClientX(el, clientX) {
   const total = mediaDuration()
-  if (!v || total <= 0) return
-  const next = Number(e.target.value)
-  if (!Number.isFinite(next)) return
-  try {
-    v.currentTime = next
-    currentTime.value = next
-  } catch {
-    /* ignore */
-  }
-  showOverlay()
+  if (total <= 0 || !el) return
+  const rect = el.getBoundingClientRect()
+  if (!rect.width) return
+  seekToRatio((clientX - rect.left) / rect.width)
 }
 
 function onProgressClick(e) {
-  const total = mediaDuration()
-  if (total <= 0) return
-  const rect = e.currentTarget.getBoundingClientRect()
-  if (!rect.width) return
-  const x = (e.clientX - rect.left) / rect.width
-  seekToRatio(x)
+  seekFromClientX(e.currentTarget, e.clientX)
+}
+
+function onProgressPointerDown(e) {
+  if (isPlayStation || e.button !== 0) return
+  const el = e.currentTarget
+  e.preventDefault()
+  el.setPointerCapture?.(e.pointerId)
+  seekFromClientX(el, e.clientX)
+  const onMove = (ev) => seekFromClientX(el, ev.clientX)
+  const onUp = () => {
+    el.removeEventListener('pointermove', onMove)
+    el.removeEventListener('pointerup', onUp)
+    el.removeEventListener('pointercancel', onUp)
+  }
+  el.addEventListener('pointermove', onMove)
+  el.addEventListener('pointerup', onUp)
+  el.addEventListener('pointercancel', onUp)
 }
 
 function onFilmBarKeydown(e) {
@@ -380,13 +487,35 @@ function bumpVolume(delta) {
   v.volume = Math.min(1, Math.max(0, v.volume + delta))
 }
 
+function getFullscreenElement() {
+  return (
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.msFullscreenElement ||
+    null
+  )
+}
+
 async function toggleFullscreen() {
-  const shell = videoEl.value?.closest('.player-shell')
-  if (!shell) return
-  if (document.fullscreenElement) {
-    await document.exitFullscreen().catch(() => {})
-  } else {
-    await shell.requestFullscreen?.().catch(() => {})
+  const v = videoEl.value
+  if (!v) return
+  try {
+    if (getFullscreenElement()) {
+      const exit =
+        document.exitFullscreen ||
+        document.webkitExitFullscreen ||
+        document.msExitFullscreen
+      if (exit) await exit.call(document)
+      return
+    }
+    if (v.webkitEnterFullscreen) {
+      v.webkitEnterFullscreen()
+      return
+    }
+    const request = v.requestFullscreen || v.webkitRequestFullscreen || v.msRequestFullscreen
+    if (request) await request.call(v)
+  } catch (err) {
+    console.warn('Fullscreen failed', err)
   }
 }
 
@@ -457,6 +586,9 @@ function onKeydown(e) {
       if (upNextVisible.value) {
         e.preventDefault()
         cancelUpNext()
+      } else if (seriesCompleteVisible.value) {
+        e.preventDefault()
+        dismissSeriesComplete()
       }
       break
     default:
@@ -467,14 +599,19 @@ function onKeydown(e) {
 onMounted(() => {
   load()
   window.addEventListener('keydown', onKeydown)
+  document.addEventListener('visibilitychange', onVisibilityFlush)
+  window.addEventListener('pagehide', onPageHide)
 })
 watch(() => props.id, load)
 onUnmounted(() => {
+  saveProgress({ force: true })
   clearInterval(pollTimer)
   clearTimeout(hideTimer)
   clearTimeout(flashTimer)
   cancelUpNext()
   window.removeEventListener('keydown', onKeydown)
+  document.removeEventListener('visibilitychange', onVisibilityFlush)
+  window.removeEventListener('pagehide', onPageHide)
 })
 </script>
 
@@ -563,9 +700,27 @@ onUnmounted(() => {
                 <button type="button" class="up-next-cancel" @click="cancelUpNext">Cancel</button>
               </div>
             </div>
+
+            <div
+              v-else-if="seriesCompleteVisible"
+              class="up-next series-complete"
+              role="dialog"
+              aria-label="Series complete"
+            >
+              <p class="up-next-label">Series complete</p>
+              <strong>{{ film.series_name || 'This series' }}</strong>
+              <p class="series-complete-copy">You’ve finished the last episode.</p>
+              <div class="up-next-actions">
+                <RouterLink class="up-next-play" to="/">Back to library</RouterLink>
+                <button type="button" class="up-next-cancel" @click="dismissSeriesComplete">
+                  Stay here
+                </button>
+              </div>
+            </div>
           </div>
 
           <div
+            v-if="isPlayStation"
             class="film-bar"
             role="group"
             aria-label="Playback controls"
@@ -609,6 +764,7 @@ onUnmounted(() => {
               :aria-valuetext="`${formatTime(currentTime)} of ${formatTime(duration || mediaDuration())}`"
               aria-label="Seek"
               @click="onProgressClick"
+              @pointerdown="onProgressPointerDown"
               @keydown="onFilmBarKeydown"
             >
               <div class="film-progress-fill" :style="{ width: progressPercent + '%' }" />
@@ -658,29 +814,7 @@ onUnmounted(() => {
               <button type="button" class="film-btn mark" @click="seekToRatio(0.25)">25%</button>
               <button type="button" class="film-btn mark" @click="seekToRatio(0.5)">50%</button>
               <button type="button" class="film-btn mark" @click="seekToRatio(0.75)">75%</button>
-              <button
-                v-if="!isPlayStation"
-                type="button"
-                class="film-btn mark"
-                @click="toggleFullscreen"
-              >
-                Full
-              </button>
             </div>
-
-            <label v-if="!isPlayStation" class="film-scrub desktop-only">
-              <span class="sr-only">Seek</span>
-              <input
-                type="range"
-                min="0"
-                step="0.1"
-                :max="duration || mediaDuration() || 0"
-                :value="currentTime"
-                :style="{ '--progress': progressPercent + '%' }"
-                :aria-valuetext="`${formatTime(currentTime)} of ${formatTime(duration || mediaDuration())}`"
-                @input="onSeekInput"
-              />
-            </label>
           </div>
         </template>
         <div v-else class="waiting" :style="{ backgroundImage: `url(${film.poster_url})` }">
@@ -762,7 +896,18 @@ onUnmounted(() => {
                 >
                   <span v-if="entryLabel(entry)" class="ep-tag">{{ entryLabel(entry) }}</span>
                   <span class="ep-name">{{ entry.name }}</span>
-                  <span v-if="entry.id === film.id" class="ep-now">Now</span>
+                  <span v-if="entry.id === film.id" class="ep-now">
+                    Now
+                    <template
+                      v-if="
+                        progressHint &&
+                        !progressHint.completed &&
+                        progressHint.position_seconds >= RESUME_MIN_SECONDS
+                      "
+                    >
+                      · {{ formatTime(progressHint.position_seconds) }}
+                    </template>
+                  </span>
                   <span v-else-if="!isPlayable(entry)" class="ep-status">{{ entry.playback_status }}</span>
                 </button>
               </li>
@@ -824,6 +969,10 @@ onUnmounted(() => {
   overflow: hidden;
   border-radius: 0.85rem 0.85rem 0 0;
   background: #000;
+}
+
+.player-shell:not(.console) .video-frame {
+  border-radius: 0.85rem;
 }
 
 .player-shell.console .video-frame {
@@ -913,12 +1062,14 @@ video,
 .film-progress {
   position: relative;
   width: 100%;
-  height: 1.6rem;
+  height: 1.85rem;
   border-radius: 999px;
   background: #4a3b32;
   border: 2px solid #6a5648;
   overflow: hidden;
   cursor: pointer;
+  touch-action: none;
+  user-select: none;
 }
 
 .film-progress:focus {
@@ -942,72 +1093,6 @@ video,
   color: var(--cream);
   font-size: 0.95rem;
   text-align: right;
-}
-
-.film-scrub {
-  flex: 1 1 10rem;
-  min-width: 8rem;
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.film-scrub input[type='range'] {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 1.4rem;
-  margin: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.film-scrub input[type='range']::-webkit-slider-runnable-track {
-  height: 0.55rem;
-  border-radius: 999px;
-  background: linear-gradient(
-    to right,
-    var(--accent) 0%,
-    var(--accent) var(--progress, 0%),
-    #4a3b32 var(--progress, 0%),
-    #4a3b32 100%
-  );
-}
-
-.film-scrub input[type='range']::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 1.35rem;
-  height: 1.35rem;
-  margin-top: -0.4rem;
-  border-radius: 50%;
-  border: 2px solid var(--cream);
-  background: var(--accent-yellow);
-}
-
-.film-scrub input[type='range']::-moz-range-track {
-  height: 0.55rem;
-  border-radius: 999px;
-  background: #4a3b32;
-}
-
-.film-scrub input[type='range']::-moz-range-progress {
-  height: 0.55rem;
-  border-radius: 999px;
-  background: var(--accent);
-}
-
-.film-scrub input[type='range']::-moz-range-thumb {
-  width: 1.35rem;
-  height: 1.35rem;
-  border-radius: 50%;
-  border: 2px solid var(--cream);
-  background: var(--accent-yellow);
-}
-
-.film-scrub input[type='range']:focus {
-  outline: 3px solid var(--accent-yellow);
-  outline-offset: 2px;
 }
 
 .player-shell.console .film-btn {
@@ -1052,7 +1137,6 @@ video,
 
 .overlay.visible {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .ctl {
@@ -1426,6 +1510,12 @@ video,
   font-weight: 800;
 }
 
+a.up-next-play {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 .up-next-play {
   border: none;
   background: var(--accent);
@@ -1436,6 +1526,12 @@ video,
   border: 1px solid rgba(255, 248, 231, 0.45);
   background: transparent;
   color: var(--cream);
+}
+
+.series-complete-copy {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: rgba(255, 248, 231, 0.8);
 }
 
 .back {
@@ -1456,16 +1552,21 @@ video,
 
 .player-shell:fullscreen,
 .player-shell:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  max-height: none;
   border-radius: 0;
   border: none;
-  max-height: 100vh;
   display: flex;
   flex-direction: column;
+  background: #000;
+  box-shadow: none;
 }
 
 .player-shell:fullscreen .video-frame,
 .player-shell:-webkit-full-screen .video-frame {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   border-radius: 0;
   display: flex;
   align-items: center;
@@ -1475,13 +1576,16 @@ video,
 
 .player-shell:fullscreen video,
 .player-shell:-webkit-full-screen video {
-  max-height: calc(100vh - 4.5rem);
+  width: 100%;
   height: 100%;
+  max-height: none;
+  min-height: 0;
   object-fit: contain;
 }
 
 .player-shell:fullscreen .film-bar,
 .player-shell:-webkit-full-screen .film-bar {
+  flex: 0 0 auto;
   border-radius: 0;
 }
 

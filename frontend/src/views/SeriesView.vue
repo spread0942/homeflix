@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { getSeries } from '../api'
+import { getSeries, listContinueWatching } from '../api'
 import { entryLabel, groupBySeason, isPlayable } from '../lib/seriesNav'
 
 const props = defineProps({
@@ -10,15 +10,27 @@ const props = defineProps({
 
 const router = useRouter()
 const series = ref(null)
+const resumeItem = ref(null)
 const loading = ref(true)
 const error = ref('')
+
+async function loadResume() {
+  try {
+    const items = await listContinueWatching()
+    resumeItem.value = items.find((i) => i.series_id === props.id) || null
+  } catch {
+    resumeItem.value = null
+  }
+}
 
 async function load() {
   loading.value = true
   error.value = ''
   series.value = null
+  resumeItem.value = null
   try {
     series.value = await getSeries(props.id)
+    await loadResume()
   } catch (e) {
     error.value = e.message
   } finally {
@@ -47,6 +59,20 @@ watch(
   { immediate: true },
 )
 
+watch(
+  resumeItem,
+  (item) => {
+    if (!item || item.series_complete || !series.value?.entries?.length) return
+    const entry = series.value.entries.find((e) => e.id === item.animation_id)
+    if (!entry) return
+    const key = entry.season == null ? 'parts' : `season-${entry.season}`
+    if (seasons.value.some((g) => g.key === key)) {
+      selectedSeasonKey.value = key
+    }
+  },
+  { immediate: true },
+)
+
 const activeSeason = computed(
   () => seasons.value.find((g) => g.key === selectedSeasonKey.value) || seasons.value[0] || null,
 )
@@ -56,12 +82,43 @@ const firstPlayable = computed(() => {
   return inSeason.find(isPlayable) || inSeason[0] || null
 })
 
+const canResume = computed(
+  () => resumeItem.value && !resumeItem.value.series_complete && resumeItem.value.animation_id,
+)
+
+const playTarget = computed(() => {
+  if (canResume.value) {
+    const id = resumeItem.value.animation_id
+    const entry = series.value?.entries?.find((e) => e.id === id)
+    return (
+      entry || {
+        id,
+        name: resumeItem.value.name,
+        season: resumeItem.value.season,
+        episode: resumeItem.value.episode,
+      }
+    )
+  }
+  return firstPlayable.value
+})
+
+const playLabelText = computed(() => {
+  if (!playTarget.value) return ''
+  const label = entryLabel(playTarget.value) || playTarget.value.name
+  if (canResume.value) return `▶ Resume ${label}`
+  return `▶ Play ${label}`
+})
+
 function openFilm(id) {
   router.push({ name: 'watch', params: { id } })
 }
 
 function playSeries() {
-  if (firstPlayable.value) openFilm(firstPlayable.value.id)
+  if (playTarget.value) openFilm(playTarget.value.id)
+}
+
+function isResumeEntry(entry) {
+  return canResume.value && entry.id === resumeItem.value.animation_id
 }
 </script>
 
@@ -79,14 +136,23 @@ function playSeries() {
           <p class="eyebrow">{{ series.kind }} · {{ series.entry_count }} entries</p>
           <h1>{{ series.name }}</h1>
           <p class="desc">{{ series.description || 'No description yet.' }}</p>
+          <p v-if="resumeItem?.series_complete" class="complete-note">Series complete</p>
           <div class="hero-actions">
             <button
-              v-if="firstPlayable"
+              v-if="playTarget && !resumeItem?.series_complete"
               type="button"
               class="play-cta"
               @click="playSeries"
             >
-              ▶ Play {{ entryLabel(firstPlayable) || firstPlayable.name }}
+              {{ playLabelText }}
+            </button>
+            <button
+              v-else-if="firstPlayable && resumeItem?.series_complete"
+              type="button"
+              class="play-cta"
+              @click="openFilm(firstPlayable.id)"
+            >
+              ▶ Play again {{ entryLabel(firstPlayable) || firstPlayable.name }}
             </button>
             <RouterLink class="back" to="/">← Back to library</RouterLink>
           </div>
@@ -111,12 +177,18 @@ function playSeries() {
         </div>
         <ul class="list">
           <li v-for="entry in activeSeason.entries" :key="entry.id">
-            <button type="button" class="row" @click="openFilm(entry.id)">
+            <button
+              type="button"
+              class="row"
+              :class="{ resume: isResumeEntry(entry) }"
+              @click="openFilm(entry.id)"
+            >
               <img :src="entry.poster_url" :alt="entry.name" />
               <div class="meta">
                 <span v-if="entryLabel(entry)" class="ep">{{ entryLabel(entry) }}</span>
                 <strong>{{ entry.name }}</strong>
                 <p>{{ entry.description || '—' }}</p>
+                <span v-if="isResumeEntry(entry)" class="resume-mark">Resume</span>
               </div>
             </button>
           </li>
@@ -192,6 +264,12 @@ function playSeries() {
   max-width: 40rem;
   color: var(--ink);
   line-height: 1.5;
+}
+
+.complete-note {
+  margin: 0 0 0.85rem;
+  font-weight: 800;
+  color: var(--teal);
 }
 
 .hero-actions {
@@ -285,6 +363,11 @@ function playSeries() {
   border-color: var(--accent);
 }
 
+.row.resume {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
 .row img {
   width: 56px;
   height: 84px;
@@ -299,6 +382,19 @@ function playSeries() {
   font-size: 0.75rem;
   font-weight: 700;
   color: var(--teal);
+}
+
+.resume-mark {
+  display: inline-block;
+  margin-top: 0.35rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--accent);
+  color: var(--cream);
 }
 
 .meta strong {
