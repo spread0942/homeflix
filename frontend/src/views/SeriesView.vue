@@ -120,6 +120,28 @@ function playSeries() {
 function isResumeEntry(entry) {
   return canResume.value && entry.id === resumeItem.value.animation_id
 }
+
+function isViewedEntry(entry) {
+  return !!entry?.viewed
+}
+
+function entryProgressPercent(entry) {
+  if (entry?.viewed) return 100
+  if (!entry?.watch_duration_seconds) return 0
+  return Math.min(
+    100,
+    Math.max(0, ((entry.watch_position_seconds || 0) / entry.watch_duration_seconds) * 100),
+  )
+}
+
+const seriesFullyCompleted = computed(
+  () => !!series.value?.completed || !!resumeItem.value?.series_complete,
+)
+
+const viewedCount = computed(() => {
+  const entries = series.value?.entries || []
+  return entries.filter((e) => e.viewed).length
+})
 </script>
 
 <template>
@@ -133,13 +155,16 @@ function isResumeEntry(entry) {
           <div v-else class="poster-fallback" aria-hidden="true">▶</div>
         </div>
         <div class="copy">
-          <p class="eyebrow">{{ series.kind }} · {{ series.entry_count }} entries</p>
+          <p class="eyebrow">
+            {{ series.kind }} · {{ series.entry_count }} entries
+            <template v-if="viewedCount"> · {{ viewedCount }} viewed</template>
+          </p>
           <h1>{{ series.name }}</h1>
           <p class="desc">{{ series.description || 'No description yet.' }}</p>
-          <p v-if="resumeItem?.series_complete" class="complete-note">Series complete</p>
+          <p v-if="seriesFullyCompleted" class="complete-note">Series complete</p>
           <div class="hero-actions">
             <button
-              v-if="playTarget && !resumeItem?.series_complete"
+              v-if="playTarget && !seriesFullyCompleted"
               type="button"
               class="play-cta"
               @click="playSeries"
@@ -147,7 +172,7 @@ function isResumeEntry(entry) {
               {{ playLabelText }}
             </button>
             <button
-              v-else-if="firstPlayable && resumeItem?.series_complete"
+              v-else-if="firstPlayable && seriesFullyCompleted"
               type="button"
               class="play-cta"
               @click="openFilm(firstPlayable.id)"
@@ -180,15 +205,25 @@ function isResumeEntry(entry) {
             <button
               type="button"
               class="row"
-              :class="{ resume: isResumeEntry(entry) }"
+              :class="{ resume: isResumeEntry(entry), viewed: isViewedEntry(entry) }"
               @click="openFilm(entry.id)"
             >
-              <img :src="entry.poster_url" :alt="entry.name" />
+              <div class="thumb">
+                <img :src="entry.poster_url" :alt="entry.name" />
+                <div
+                  v-if="entryProgressPercent(entry) > 0 && !isViewedEntry(entry)"
+                  class="ep-progress"
+                  aria-hidden="true"
+                >
+                  <div class="ep-progress-fill" :style="{ width: `${entryProgressPercent(entry)}%` }" />
+                </div>
+              </div>
               <div class="meta">
                 <span v-if="entryLabel(entry)" class="ep">{{ entryLabel(entry) }}</span>
                 <strong>{{ entry.name }}</strong>
                 <p>{{ entry.description || '—' }}</p>
-                <span v-if="isResumeEntry(entry)" class="resume-mark">Resume</span>
+                <span v-if="isViewedEntry(entry)" class="viewed-mark">Viewed</span>
+                <span v-else-if="isResumeEntry(entry)" class="resume-mark">Resume</span>
               </div>
             </button>
           </li>
@@ -368,12 +403,37 @@ function isResumeEntry(entry) {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
+.row.viewed {
+  border-color: color-mix(in srgb, var(--teal) 55%, transparent);
+}
+
+.thumb {
+  position: relative;
+  width: 56px;
+  height: 84px;
+}
+
 .row img {
   width: 56px;
   height: 84px;
   object-fit: cover;
   border-radius: 0.35rem;
   border: 2px solid var(--brown);
+  display: block;
+}
+
+.ep-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.ep-progress-fill {
+  height: 100%;
+  background: var(--accent-yellow);
 }
 
 .ep {
@@ -384,7 +444,8 @@ function isResumeEntry(entry) {
   color: var(--teal);
 }
 
-.resume-mark {
+.resume-mark,
+.viewed-mark {
   display: inline-block;
   margin-top: 0.35rem;
   padding: 0.15rem 0.45rem;
@@ -393,7 +454,15 @@ function isResumeEntry(entry) {
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.resume-mark {
   background: var(--accent);
+  color: var(--cream);
+}
+
+.viewed-mark {
+  background: var(--teal);
   color: var(--cream);
 }
 

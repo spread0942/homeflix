@@ -965,7 +965,11 @@ onUnmounted(() => {
                 <button
                   type="button"
                   class="ep-row"
-                  :class="{ current: entry.id === film.id, disabled: !isPlayable(entry) }"
+                  :class="{
+                    current: entry.id === film.id,
+                    disabled: !isPlayable(entry),
+                    viewed: entry.viewed && entry.id !== film.id,
+                  }"
                   :disabled="entry.id === film.id"
                   @click="goToEntry(entry)"
                 >
@@ -983,6 +987,7 @@ onUnmounted(() => {
                       · {{ formatTime(progressHint.position_seconds) }}
                     </template>
                   </span>
+                  <span v-else-if="entry.viewed" class="ep-viewed">Viewed</span>
                   <span v-else-if="!isPlayable(entry)" class="ep-status">{{ entry.playback_status }}</span>
                 </button>
               </li>
@@ -1525,7 +1530,8 @@ video,
 }
 
 .ep-now,
-.ep-status {
+.ep-status,
+.ep-viewed {
   font-size: 0.72rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -1534,6 +1540,10 @@ video,
 
 .ep-now {
   color: var(--accent);
+}
+
+.ep-viewed {
+  color: var(--teal);
 }
 
 .ep-status {

@@ -86,6 +86,13 @@ function subtitle(item) {
   }
   return item.description || 'Standalone film'
 }
+
+function statusBadge(item) {
+  if (item.completed) return { text: 'Completed', className: 'done' }
+  if (item.type === 'film' && item.viewed) return { text: 'Viewed', className: 'viewed' }
+  if (item.type === 'series') return { text: 'Series', className: '' }
+  return null
+}
 </script>
 
 <template>
@@ -145,7 +152,12 @@ function subtitle(item) {
       </div>
       <ul v-else class="grid">
         <li v-for="item in items" :key="`${item.type}-${item.id}`">
-          <button class="card" type="button" @click="openItem(item)">
+          <button
+            class="card"
+            :class="{ completed: item.completed }"
+            type="button"
+            @click="openItem(item)"
+          >
             <div class="poster-wrap">
               <img
                 v-if="item.poster_url"
@@ -154,7 +166,13 @@ function subtitle(item) {
                 loading="lazy"
               />
               <div v-else class="poster-fallback" aria-hidden="true">▶</div>
-              <span v-if="item.type === 'series'" class="badge">Series</span>
+              <span
+                v-if="statusBadge(item)"
+                class="badge"
+                :class="statusBadge(item).className"
+              >
+                {{ statusBadge(item).text }}
+              </span>
             </div>
             <div class="meta">
               <h2>{{ item.name }}</h2>
@@ -357,6 +375,26 @@ function subtitle(item) {
 
 .badge.done {
   background: var(--teal);
+}
+
+.badge.viewed {
+  background: color-mix(in srgb, var(--brown) 85%, #000);
+}
+
+.card.completed .poster-wrap {
+  box-shadow: 0 10px 0 color-mix(in srgb, var(--teal) 40%, transparent);
+}
+
+.card.completed .poster-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--teal) 28%, transparent),
+    transparent 42%
+  );
+  pointer-events: none;
 }
 
 .progress-track {

@@ -16,6 +16,7 @@ type Series struct {
 	CreatedAt   time.Time   `json:"created_at"`
 	PosterURL   string      `json:"poster_url"`
 	EntryCount  int         `json:"entry_count"`
+	Completed   bool        `json:"completed"` // all playable episodes viewed
 	Entries     []Animation `json:"entries,omitempty"`
 }
 
@@ -26,21 +27,24 @@ func (s *Series) WithPosterURL() {
 }
 
 type Animation struct {
-	ID             uuid.UUID  `json:"id"`
-	Name           string     `json:"name"`
-	Description    string     `json:"description"`
-	VideoPath      string     `json:"-"`
-	PosterPath     string     `json:"-"`
-	ContentType    string     `json:"content_type"`
-	PlaybackStatus string     `json:"playback_status"`
-	SeriesID       *uuid.UUID `json:"series_id,omitempty"`
-	SeriesName     string     `json:"series_name,omitempty"`
-	Season         *int       `json:"season,omitempty"`
-	Episode        *int       `json:"episode,omitempty"`
-	SortOrder      int        `json:"sort_order"`
-	CreatedAt      time.Time  `json:"created_at"`
-	PosterURL      string     `json:"poster_url"`
-	StreamURL      string     `json:"stream_url"`
+	ID                   uuid.UUID  `json:"id"`
+	Name                 string     `json:"name"`
+	Description          string     `json:"description"`
+	VideoPath            string     `json:"-"`
+	PosterPath           string     `json:"-"`
+	ContentType          string     `json:"content_type"`
+	PlaybackStatus       string     `json:"playback_status"`
+	SeriesID             *uuid.UUID `json:"series_id,omitempty"`
+	SeriesName           string     `json:"series_name,omitempty"`
+	Season               *int       `json:"season,omitempty"`
+	Episode              *int       `json:"episode,omitempty"`
+	SortOrder            int        `json:"sort_order"`
+	CreatedAt            time.Time  `json:"created_at"`
+	PosterURL            string     `json:"poster_url"`
+	StreamURL            string     `json:"stream_url"`
+	Viewed               bool       `json:"viewed"` // episode/film finished
+	WatchPositionSeconds float64    `json:"watch_position_seconds,omitempty"`
+	WatchDurationSeconds float64    `json:"watch_duration_seconds,omitempty"`
 }
 
 func (a *Animation) WithURLs() {
@@ -60,6 +64,8 @@ type LibraryItem struct {
 	Kind        string     `json:"kind,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	FilmID      *uuid.UUID `json:"film_id,omitempty"` // for type=film, same as ID
+	Viewed      bool       `json:"viewed"`             // film started, or series fully watched
+	Completed   bool       `json:"completed"`          // film finished, or every episode viewed
 }
 
 // WatchProgress is the saved playback position for one film/episode.

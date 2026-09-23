@@ -225,7 +225,65 @@ func (s *Store) ListBySeries(ctx context.Context, seriesID uuid.UUID) ([]models.
 		return nil, err
 	}
 	defer rows.Close()
-	return scanAnimationRows(rows)
+	out, err := scanAnimationRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.attachWatchProgress(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *Store) attachWatchProgress(ctx context.Context, items []models.Animation) error {
+	if len(items) == 0 {
+		return nil
+	}
+	ids := make([]uuid.UUID, len(items))
+	index := make(map[uuid.UUID]int, len(items))
+	for i := range items {
+		ids[i] = items[i].ID
+		index[items[i].ID] = i
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT animation_id, position_seconds, duration_seconds, completed
+		FROM watch_progress
+		WHERE animation_id = ANY($1)`, ids)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id uuid.UUID
+		var pos, dur float64
+		var done bool
+		if err := rows.Scan(&id, &pos, &dur, &done); err != nil {
+			return err
+		}
+		i, ok := index[id]
+		if !ok {
+			continue
+		}
+		items[i].WatchPositionSeconds = pos
+		items[i].WatchDurationSeconds = dur
+		items[i].Viewed = done
+	}
+	return rows.Err()
+}
+
+func seriesAllEpisodesViewed(entries []models.Animation) bool {
+	ready := 0
+	viewed := 0
+	for _, e := range entries {
+		if e.PlaybackStatus != "ready" {
+			continue
+		}
+		ready++
+		if e.Viewed {
+			viewed++
+		}
+	}
+	return ready > 0 && viewed == ready
 }
 
 func (s *Store) ListSeries(ctx context.Context, q string) ([]models.Series, error) {
@@ -316,6 +374,7 @@ func (s *Store) GetSeries(ctx context.Context, id uuid.UUID) (*models.Series, er
 		return nil, err
 	}
 	ser.Entries = entries
+	ser.Completed = seriesAllEpisodesViewed(entries)
 	return &ser, nil
 }
 
@@ -370,6 +429,15 @@ func (s *Store) Library(ctx context.Context, q string) ([]models.LibraryItem, er
 		return nil, err
 	}
 
+	viewedSeries, completedSeries, err := s.seriesViewFlags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	viewedFilms, completedFilms, err := s.filmViewFlags(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	items := make([]models.LibraryItem, 0, len(seriesList)+len(films))
 	for _, ser := range seriesList {
 		items = append(items, models.LibraryItem{
@@ -381,6 +449,8 @@ func (s *Store) Library(ctx context.Context, q string) ([]models.LibraryItem, er
 			EntryCount:  ser.EntryCount,
 			Kind:        ser.Kind,
 			CreatedAt:   ser.CreatedAt,
+			Viewed:      viewedSeries[ser.ID],
+			Completed:   completedSeries[ser.ID],
 		})
 	}
 	for _, f := range films {
@@ -393,6 +463,8 @@ func (s *Store) Library(ctx context.Context, q string) ([]models.LibraryItem, er
 			PosterURL:   f.PosterURL,
 			CreatedAt:   f.CreatedAt,
 			FilmID:      &id,
+			Viewed:      viewedFilms[f.ID],
+			Completed:   completedFilms[f.ID],
 		})
 	}
 
@@ -405,6 +477,74 @@ func (s *Store) Library(ctx context.Context, q string) ([]models.LibraryItem, er
 		}
 	}
 	return items, nil
+}
+
+// seriesViewFlags: a series is viewed/completed only when every ready episode is finished.
+func (s *Store) seriesViewFlags(ctx context.Context) (viewed, completed map[uuid.UUID]bool, err error) {
+	viewed = make(map[uuid.UUID]bool)
+	completed = make(map[uuid.UUID]bool)
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT a.series_id
+		FROM watch_progress wp
+		JOIN animations a ON a.id = wp.animation_id
+		WHERE a.series_id IS NOT NULL AND wp.completed = true`)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	var candidates []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, nil, err
+		}
+		candidates = append(candidates, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	for _, seriesID := range candidates {
+		entries, err := s.ListBySeries(ctx, seriesID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if seriesAllEpisodesViewed(entries) {
+			viewed[seriesID] = true
+			completed[seriesID] = true
+		}
+	}
+	return viewed, completed, nil
+}
+
+func (s *Store) filmViewFlags(ctx context.Context) (viewed, completed map[uuid.UUID]bool, err error) {
+	viewed = make(map[uuid.UUID]bool)
+	completed = make(map[uuid.UUID]bool)
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT wp.animation_id, wp.completed
+		FROM watch_progress wp
+		JOIN animations a ON a.id = wp.animation_id
+		WHERE a.series_id IS NULL`)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id uuid.UUID
+		var done bool
+		if err := rows.Scan(&id, &done); err != nil {
+			return nil, nil, err
+		}
+		viewed[id] = true
+		if done {
+			completed[id] = true
+		}
+	}
+	return viewed, completed, rows.Err()
 }
 
 func applySeriesPoster(ser *models.Series, fallback *string) {
