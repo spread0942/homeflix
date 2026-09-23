@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -428,7 +429,36 @@ func (s *Store) GetProgress(ctx context.Context, animationID uuid.UUID) (*models
 	return &p, nil
 }
 
+// ErrSkipProgress means the client sent a negligible position and there is nothing to store.
+var ErrSkipProgress = errors.New("skip progress")
+
 func (s *Store) UpsertProgress(ctx context.Context, p *models.WatchProgress) error {
+	const minKeepSeconds = 5.0
+
+	existing, err := s.GetProgress(ctx, p.AnimationID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+
+	// Ignore near-zero "saves" that would wipe a real resume point (common on
+	// unmount/pagehide when the video element has already reset).
+	if existing != nil && !p.Completed && p.PositionSeconds < minKeepSeconds &&
+		existing.PositionSeconds >= minKeepSeconds && !existing.Completed {
+		*p = *existing
+		return nil
+	}
+	if !p.Completed && p.PositionSeconds < minKeepSeconds {
+		if existing == nil {
+			return ErrSkipProgress
+		}
+		*p = *existing
+		return nil
+	}
+
+	if existing != nil && p.DurationSeconds <= 0 && existing.DurationSeconds > 0 {
+		p.DurationSeconds = existing.DurationSeconds
+	}
+
 	return s.pool.QueryRow(ctx, `
 		INSERT INTO watch_progress (animation_id, position_seconds, duration_seconds, completed, updated_at)
 		VALUES ($1, $2, $3, $4, now())

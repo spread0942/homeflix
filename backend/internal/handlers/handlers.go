@@ -147,6 +147,10 @@ func (a *API) PutProgress(w http.ResponseWriter, r *http.Request) {
 		Completed:       completed,
 	}
 	if err := a.Store.UpsertProgress(r.Context(), p); err != nil {
+		if errors.Is(err, store.ErrSkipProgress) {
+			writeJSON(w, http.StatusOK, p)
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "failed to save progress")
 		return
 	}

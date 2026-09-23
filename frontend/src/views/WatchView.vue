@@ -41,6 +41,9 @@ let flashTimer
 let upNextTimer
 let lastProgressSave = 0
 let resumeApplied = false
+let lastGoodPosition = 0
+let lastGoodDuration = 0
+let progressFilmId = ''
 
 const SEEK_SECONDS = 10
 const SEEK_JUMPS = [30, 60]
@@ -82,7 +85,23 @@ function mediaDuration() {
   } catch {
     /* ignore */
   }
-  return duration.value || 0
+  return duration.value || lastGoodDuration || 0
+}
+
+function readPlaybackClock() {
+  const v = videoEl.value
+  const livePos = v && Number.isFinite(v.currentTime) ? v.currentTime : 0
+  const liveDur = mediaDuration()
+  // Prefer live clock when it looks real; otherwise keep last good values
+  // so unmount/pagehide cannot wipe progress with a reset video element.
+  const pos =
+    livePos >= RESUME_MIN_SECONDS
+      ? livePos
+      : Math.max(livePos, lastGoodPosition)
+  const dur = liveDur > 0 ? liveDur : lastGoodDuration
+  if (livePos >= RESUME_MIN_SECONDS) lastGoodPosition = livePos
+  if (liveDur > 0) lastGoodDuration = liveDur
+  return { pos, dur }
 }
 
 const seriesNav = computed(() => {
@@ -111,6 +130,9 @@ const episodePosition = computed(() => {
 })
 
 async function load() {
+  if (progressFilmId) {
+    await saveProgress({ force: true, filmId: progressFilmId })
+  }
   loading.value = true
   error.value = ''
   playError.value = ''
@@ -123,10 +145,14 @@ async function load() {
   progressHint.value = null
   resumeApplied = false
   lastProgressSave = 0
+  lastGoodPosition = 0
+  lastGoodDuration = 0
+  progressFilmId = ''
   cancelUpNext()
   seriesCompleteVisible.value = false
   try {
     film.value = await getAnimation(props.id)
+    progressFilmId = film.value.id
     if (film.value.series_id) {
       try {
         series.value = await getSeries(film.value.series_id)
@@ -139,13 +165,15 @@ async function load() {
       progressHint.value = p
       if (!p.completed && p.position_seconds >= RESUME_MIN_SECONDS) {
         resumePosition.value = p.position_seconds
+        lastGoodPosition = p.position_seconds
+        lastGoodDuration = p.duration_seconds || 0
       }
     } catch {
       /* no saved progress */
     }
     maybePoll()
     await nextTick()
-    bindVideoEvents()
+    syncVideoState()
   } catch (e) {
     error.value = e.message
   } finally {
@@ -191,22 +219,27 @@ function dismissSeriesComplete() {
   seriesCompleteVisible.value = false
 }
 
-async function saveProgress({ completed = false, force = false } = {}) {
-  if (!film.value || film.value.playback_status !== 'ready') return
-  const v = videoEl.value
-  const pos = v ? v.currentTime || 0 : currentTime.value || 0
-  const dur = v ? mediaDuration() : duration.value || 0
-  if (!force && pos < 1 && !completed) return
+async function saveProgress({ completed = false, force = false, filmId = '' } = {}) {
+  const id = filmId || film.value?.id || progressFilmId
+  if (!id) return
+  if (film.value && film.value.id === id && film.value.playback_status !== 'ready') return
+
+  const { pos, dur } = readPlaybackClock()
+  // Never persist a near-zero scrub — it wipes resume points on leave/remount.
+  if (!completed && pos < RESUME_MIN_SECONDS) return
+
   const now = Date.now()
   if (!force && !completed && now - lastProgressSave < PROGRESS_SAVE_MS) return
   lastProgressSave = now
   try {
-    const saved = await putProgress(film.value.id, {
-      position_seconds: completed ? dur || pos : pos,
+    const saved = await putProgress(id, {
+      position_seconds: completed ? Math.max(dur || pos, pos) : pos,
       duration_seconds: dur,
       completed,
     })
-    progressHint.value = saved
+    if (!filmId || filmId === film.value?.id) {
+      progressHint.value = saved
+    }
   } catch {
     /* ignore transient save errors */
   }
@@ -218,10 +251,12 @@ function applyResumeSeek() {
   const pos = resumePosition.value
   if (!v || !(pos >= RESUME_MIN_SECONDS)) return
   const dur = Number.isFinite(v.duration) ? v.duration : 0
-  if (dur > 0 && pos >= dur - 2) return
+  // Only skip resume when the saved point is past the end (already finished).
+  if (dur > 0 && pos >= dur - 1) return
   try {
     v.currentTime = pos
     currentTime.value = pos
+    lastGoodPosition = pos
     resumeApplied = true
   } catch {
     /* seek may fail until more data is buffered */
@@ -238,7 +273,7 @@ function maybePoll() {
           clearInterval(pollTimer)
           playError.value = ''
           await nextTick()
-          bindVideoEvents()
+          syncVideoState()
         }
       } catch {
         /* ignore transient poll errors */
@@ -247,39 +282,73 @@ function maybePoll() {
   }
 }
 
-function bindVideoEvents() {
+function syncVideoState() {
   const v = videoEl.value
   if (!v) return
   playing.value = !v.paused
   currentTime.value = v.currentTime || 0
   duration.value = Number.isFinite(v.duration) ? v.duration : 0
-  v.controls = true
-  v.onplay = () => {
-    playing.value = true
-    if (!isPlayStation) scheduleHideOverlay()
+  if (duration.value > 0) lastGoodDuration = duration.value
+  if (currentTime.value >= RESUME_MIN_SECONDS) lastGoodPosition = currentTime.value
+  if (v.readyState >= 1) applyResumeSeek()
+}
+
+function onVideoPlay() {
+  playing.value = true
+  if (!isPlayStation) scheduleHideOverlay()
+}
+
+function onVideoPause() {
+  playing.value = false
+  showOverlay(true)
+  saveProgress({ force: true })
+}
+
+function onVideoEnded() {
+  playing.value = false
+  showOverlay(true)
+  saveProgress({ completed: true, force: true })
+  startUpNextCountdown()
+}
+
+function onVideoTimeUpdate(e) {
+  const v = e?.target || videoEl.value
+  if (!v) return
+  currentTime.value = v.currentTime || 0
+  if (currentTime.value >= RESUME_MIN_SECONDS) {
+    lastGoodPosition = currentTime.value
   }
-  v.onpause = () => {
-    playing.value = false
-    showOverlay(true)
-    saveProgress({ force: true })
+  const d = mediaDuration()
+  if (d > 0) lastGoodDuration = d
+  saveProgress()
+}
+
+function onVideoDurationChange(e) {
+  const v = e?.target || videoEl.value
+  if (!v) return
+  duration.value = Number.isFinite(v.duration) ? v.duration : 0
+  if (duration.value > 0) lastGoodDuration = duration.value
+}
+
+function onVideoLoadedMetadata(e) {
+  const v = e?.target || videoEl.value
+  if (!v) return
+  duration.value = Number.isFinite(v.duration) ? v.duration : 0
+  if (duration.value > 0) lastGoodDuration = duration.value
+  applyResumeSeek()
+}
+
+function onVideoSeeked(e) {
+  const v = e?.target || videoEl.value
+  if (!v) return
+  currentTime.value = v.currentTime || 0
+  if (currentTime.value >= RESUME_MIN_SECONDS) {
+    lastGoodPosition = currentTime.value
   }
-  v.onended = () => {
-    playing.value = false
-    showOverlay(true)
-    saveProgress({ completed: true, force: true })
-    startUpNextCountdown()
-  }
-  v.ontimeupdate = () => {
-    currentTime.value = v.currentTime || 0
-    saveProgress()
-  }
-  v.ondurationchange = () => {
-    duration.value = Number.isFinite(v.duration) ? v.duration : 0
-  }
-  v.onloadedmetadata = () => {
-    duration.value = Number.isFinite(v.duration) ? v.duration : 0
-    applyResumeSeek()
-  }
+  const d = mediaDuration()
+  if (d > 0) lastGoodDuration = d
+  // Scrubbing while paused never fires a useful timeupdate cadence — force save.
+  saveProgress({ force: true })
 }
 
 function onVisibilityFlush() {
@@ -289,18 +358,17 @@ function onVisibilityFlush() {
 }
 
 function onPageHide() {
-  if (!film.value || film.value.playback_status !== 'ready') return
-  const v = videoEl.value
-  const pos = v ? v.currentTime || 0 : currentTime.value || 0
-  const dur = v ? mediaDuration() : duration.value || 0
-  if (pos < 1) return
+  const id = film.value?.id || progressFilmId
+  if (!id) return
+  const { pos, dur } = readPlaybackClock()
+  if (pos < RESUME_MIN_SECONDS) return
   const body = JSON.stringify({
     position_seconds: pos,
     duration_seconds: dur,
     completed: false,
   })
   try {
-    fetch(`/api/progress/${film.value.id}`, {
+    fetch(`/api/progress/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body,
@@ -645,6 +713,13 @@ onUnmounted(() => {
               preload="metadata"
               :poster="film.poster_url"
               :src="film.stream_url"
+              @play="onVideoPlay"
+              @pause="onVideoPause"
+              @ended="onVideoEnded"
+              @timeupdate="onVideoTimeUpdate"
+              @durationchange="onVideoDurationChange"
+              @loadedmetadata="onVideoLoadedMetadata"
+              @seeked="onVideoSeeked"
               @error="onVideoError"
             >
               Your browser does not support HTML5 video.
