@@ -1062,7 +1062,7 @@ function rowStatusLabel(row) {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--brown);
+  color: var(--accent);
 }
 
 .intro h1 {
@@ -1106,9 +1106,9 @@ function rowStatusLabel(row) {
 }
 
 .tab.active {
-  background: var(--accent);
+  background: transparent;
   border-color: var(--accent);
-  color: var(--cream);
+  color: var(--accent);
 }
 
 .status-pill {
@@ -1150,10 +1150,10 @@ function rowStatusLabel(row) {
   gap: 1rem;
   padding: 1.25rem;
   margin-bottom: 1.25rem;
-  background: color-mix(in srgb, var(--cream) 94%, transparent);
-  border: 1px solid color-mix(in srgb, var(--brown) 30%, transparent);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--cream) 22%, transparent);
   border-radius: 0.35rem;
-  color: var(--on-light);
+  color: var(--cream);
 }
 
 .form {
@@ -1169,14 +1169,14 @@ function rowStatusLabel(row) {
   margin: 0;
   font-family: var(--font-display);
   font-size: 1.35rem;
-  color: var(--brown);
+  color: var(--cream);
 }
 
 label {
   display: grid;
   gap: 0.4rem;
   font-weight: 700;
-  color: var(--brown);
+  color: color-mix(in srgb, var(--cream) 85%, transparent);
 }
 
 .field-note {
@@ -1190,10 +1190,41 @@ textarea,
 select {
   width: 100%;
   padding: 0.7rem 0.85rem;
-  border: 1px solid color-mix(in srgb, var(--brown) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cream) 30%, transparent);
   border-radius: 0.35rem;
-  background: #fff;
-  color: var(--on-light);
+  background: transparent;
+  color: var(--cream);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in srgb, var(--cream) 45%, transparent);
+}
+
+input[type='file'] {
+  color: color-mix(in srgb, var(--cream) 75%, transparent);
+}
+
+input[type='file']::file-selector-button {
+  margin-right: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 35%, transparent);
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--cream);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+input[type='file']::file-selector-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+option {
+  background: var(--bg);
+  color: var(--cream);
 }
 
 .row2,
@@ -1218,13 +1249,13 @@ select {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--accent);
+  color: color-mix(in srgb, var(--cream) 72%, transparent);
 }
 
 .hint code {
   font-size: 0.85em;
   font-weight: 700;
-  color: var(--brown);
+  color: var(--accent);
 }
 
 .form-actions {
@@ -1256,10 +1287,10 @@ select {
 
 .cancel {
   padding: 0.75rem 1.2rem;
-  border: 1px solid color-mix(in srgb, var(--brown) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cream) 35%, transparent);
   border-radius: 0.35rem;
   font-weight: 700;
-  color: var(--brown);
+  color: var(--cream);
   background: transparent;
 }
 
@@ -1328,7 +1359,7 @@ select {
   gap: 0.45rem;
   padding-bottom: 0.55rem;
   font-weight: 700;
-  color: var(--brown);
+  color: var(--cream);
   white-space: nowrap;
 }
 
@@ -1340,16 +1371,16 @@ select {
 
 .replace-preview {
   padding: 0.85rem 1rem;
-  border-radius: 0.75rem;
-  background: color-mix(in srgb, var(--cream) 75%, #fff);
-  border: 1px dashed color-mix(in srgb, var(--brown) 30%, transparent);
+  border-radius: 0.35rem;
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--cream) 30%, transparent);
 }
 
 .preview-summary {
   margin: 0;
   font-size: 0.85rem;
-  font-weight: 800;
-  color: var(--brown);
+  font-weight: 700;
+  color: var(--cream);
 }
 
 .preview-error {
@@ -1373,7 +1404,7 @@ select {
   display: grid;
   gap: 0.15rem 0.5rem;
   padding: 0.35rem 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--brown) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--cream) 12%, transparent);
   font-size: 0.82rem;
   font-weight: 600;
 }
@@ -1383,7 +1414,7 @@ select {
 }
 
 .preview-before {
-  color: color-mix(in srgb, var(--on-light) 55%, transparent);
+  color: color-mix(in srgb, var(--cream) 55%, transparent);
   text-decoration: line-through;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -1394,7 +1425,7 @@ select {
 }
 
 .preview-after {
-  color: var(--brown);
+  color: var(--cream);
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -1408,48 +1439,49 @@ select {
 .batch-empty {
   margin: 0;
   padding: 1rem;
-  border-radius: 0.75rem;
-  background: color-mix(in srgb, var(--cream) 70%, #fff);
-  color: var(--brown);
+  border-radius: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 22%, transparent);
+  background: transparent;
+  color: color-mix(in srgb, var(--cream) 75%, transparent);
   font-weight: 600;
 }
 
 .batch-table-wrap {
   overflow-x: auto;
   border-radius: 0.35rem;
-  border: 1px solid color-mix(in srgb, var(--brown) 25%, transparent);
-  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--cream) 22%, transparent);
+  background: transparent;
 }
 
 .batch-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
-  color: var(--on-light);
+  color: var(--cream);
 }
 
 .batch-table th {
   text-align: left;
   padding: 0.65rem 0.55rem;
-  background: color-mix(in srgb, var(--cream) 80%, #fff);
-  color: var(--brown);
-  font-weight: 800;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 700;
   white-space: nowrap;
-  border-bottom: 2px solid color-mix(in srgb, var(--brown) 20%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--cream) 20%, transparent);
 }
 
 .batch-table td {
   padding: 0.45rem 0.4rem;
   vertical-align: middle;
-  border-bottom: 1px solid color-mix(in srgb, var(--brown) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--cream) 12%, transparent);
 }
 
 .batch-table tr.is-uploading {
-  background: color-mix(in srgb, var(--accent) 8%, #fff);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .batch-table tr.is-error {
-  background: color-mix(in srgb, #8b1e1e 6%, #fff);
+  background: color-mix(in srgb, #8b1e1e 18%, transparent);
 }
 
 .batch-table input,
@@ -1474,7 +1506,7 @@ select {
 .file-name {
   display: block;
   font-weight: 700;
-  color: var(--brown);
+  color: var(--cream);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1484,7 +1516,7 @@ select {
   display: block;
   font-size: 0.75rem;
   font-weight: 600;
-  color: color-mix(in srgb, var(--on-light) 55%, transparent);
+  color: color-mix(in srgb, var(--cream) 55%, transparent);
 }
 
 .status-cell .status-pill {
