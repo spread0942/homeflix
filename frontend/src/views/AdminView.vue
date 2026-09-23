@@ -91,14 +91,6 @@ async function refresh() {
 
 onMounted(refresh)
 
-function titleFromFilename(filename) {
-  const base = filename.replace(/\.[^.]+$/, '')
-  const spaced = base.replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim()
-  if (!spaced) return ''
-  const lower = spaced.toLowerCase()
-  return lower.charAt(0).toUpperCase() + lower.slice(1)
-}
-
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`
@@ -278,7 +270,7 @@ function newBatchRow(file) {
   return {
     key: `batch-${batchSeq}`,
     file,
-    name: titleFromFilename(file.name) || file.name,
+    name: file.name.replace(/\.[^.]+$/, '') || file.name,
     description: '',
     seriesId: '',
     season: '',
@@ -705,8 +697,7 @@ function rowStatusLabel(row) {
         <div class="batch-head">
           <h2>Upload films / episodes</h2>
           <p class="hint">
-            Select several videos, edit titles and series in the table, then upload all. Filenames
-            like <code>questo_il_titolo.mp4</code> become “Questo il titolo”.
+            Select several videos, edit titles and series in the table, then upload all.
           </p>
         </div>
 
