@@ -919,6 +919,15 @@ onUnmounted(() => {
           <p v-else>Playback not ready.</p>
         </div>
       </div>
+      <p v-if="film.playback_status === 'ready'" class="shortcuts">
+        <kbd>Space</kbd> play/pause ·
+        <kbd>←</kbd><kbd>→</kbd> seek ·
+        <kbd>M</kbd> mute ·
+        <kbd>F</kbd> fullscreen
+        <template v-if="seriesNav && seriesNav.list.length > 1">
+          · <kbd>P</kbd> prev · <kbd>N</kbd> next
+        </template>
+      </p>
       <p v-if="playError" class="banner err">{{ playError }}</p>
       <div class="details">
         <p class="eyebrow">Now playing</p>
@@ -1018,13 +1027,6 @@ onUnmounted(() => {
           </ul>
         </div>
 
-        <p v-if="film.playback_status === 'ready'" class="shortcuts">
-          On video: ←10s · play/pause · +10s · also
-          <kbd>Space</kbd> <kbd>←</kbd><kbd>→</kbd> <kbd>M</kbd> <kbd>F</kbd>
-          <template v-if="seriesNav && seriesNav.list.length > 1">
-            · series <kbd>P</kbd> prev · <kbd>N</kbd> next
-          </template>
-        </p>
         <RouterLink
           v-if="film.series_id"
           class="back"
@@ -1345,7 +1347,7 @@ video,
 }
 
 .shortcuts {
-  margin: 0 0 1rem;
+  margin: 0.65rem 0 0;
   font-size: 0.9rem;
   font-weight: 600;
   color: color-mix(in srgb, var(--cream) 65%, transparent);
