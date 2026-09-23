@@ -24,7 +24,6 @@ const videoEl = ref(null)
 const playing = ref(false)
 const overlayVisible = ref(true)
 const seekFlash = ref('') // 'back' | 'fwd' | ''
-const episodesOpen = ref(false)
 const upNextVisible = ref(false)
 const upNextSeconds = ref(0)
 const seriesCompleteVisible = ref(false)
@@ -673,13 +672,6 @@ function onKeydown(e) {
         goToEntry(prevEntry.value)
       }
       break
-    case 'e':
-    case 'E':
-      if (series.value?.entries?.length) {
-        e.preventDefault()
-        episodesOpen.value = !episodesOpen.value
-      }
-      break
     case 'Escape':
       if (upNextVisible.value) {
         e.preventDefault()
@@ -981,63 +973,56 @@ onUnmounted(() => {
           </button>
         </nav>
 
-        <details
-          v-if="seasonGroups.length"
-          class="episodes"
-          :open="episodesOpen"
-          @toggle="episodesOpen = $event.target.open"
-        >
-          <summary>Episodes <kbd>E</kbd></summary>
-          <div v-if="activeSeason" class="ep-group">
-            <label v-if="seasonGroups.length > 1" class="season-pick">
-              Season
-              <select v-model="selectedSeasonKey" aria-label="Select season">
-                <option v-for="group in seasonGroups" :key="group.key" :value="group.key">
-                  {{ group.label }} ({{ group.entries.length }})
-                </option>
-              </select>
-            </label>
-            <h3 v-else>{{ activeSeason.label }}</h3>
-            <ul>
-              <li v-for="entry in activeSeason.entries" :key="entry.id">
-                <button
-                  type="button"
-                  class="ep-row"
-                  :class="{
-                    current: entry.id === film.id,
-                    disabled: !isPlayable(entry),
-                    viewed: entry.viewed && entry.id !== film.id,
-                  }"
-                  :disabled="entry.id === film.id"
-                  @click="goToEntry(entry)"
-                >
-                  <span v-if="entryLabel(entry)" class="ep-tag">{{ entryLabel(entry) }}</span>
-                  <span class="ep-name">{{ entry.name }}</span>
-                  <span v-if="entry.id === film.id" class="ep-now">
-                    Now
-                    <template
-                      v-if="
-                        progressHint &&
-                        !progressHint.completed &&
-                        progressHint.position_seconds >= RESUME_MIN_SECONDS
-                      "
-                    >
-                      · {{ formatTime(progressHint.position_seconds) }}
-                    </template>
-                  </span>
-                  <span v-else-if="entry.viewed" class="ep-viewed">Viewed</span>
-                  <span v-else-if="!isPlayable(entry)" class="ep-status">{{ entry.playback_status }}</span>
-                </button>
-              </li>
-            </ul>
-          </div>
-        </details>
+        <div v-if="activeSeason" class="episodes">
+          <h2 class="episodes-title">Episodes</h2>
+          <label v-if="seasonGroups.length > 1" class="season-pick">
+            Season
+            <select v-model="selectedSeasonKey" aria-label="Select season">
+              <option v-for="group in seasonGroups" :key="group.key" :value="group.key">
+                {{ group.label }} ({{ group.entries.length }})
+              </option>
+            </select>
+          </label>
+          <h3 v-else class="season-label">{{ activeSeason.label }}</h3>
+          <ul>
+            <li v-for="entry in activeSeason.entries" :key="entry.id">
+              <button
+                type="button"
+                class="ep-row"
+                :class="{
+                  current: entry.id === film.id,
+                  disabled: !isPlayable(entry),
+                  viewed: entry.viewed && entry.id !== film.id,
+                }"
+                :disabled="entry.id === film.id"
+                @click="goToEntry(entry)"
+              >
+                <span v-if="entryLabel(entry)" class="ep-tag">{{ entryLabel(entry) }}</span>
+                <span class="ep-name">{{ entry.name }}</span>
+                <span v-if="entry.id === film.id" class="ep-now">
+                  Now
+                  <template
+                    v-if="
+                      progressHint &&
+                      !progressHint.completed &&
+                      progressHint.position_seconds >= RESUME_MIN_SECONDS
+                    "
+                  >
+                    · {{ formatTime(progressHint.position_seconds) }}
+                  </template>
+                </span>
+                <span v-else-if="entry.viewed" class="ep-viewed">Viewed</span>
+                <span v-else-if="!isPlayable(entry)" class="ep-status">{{ entry.playback_status }}</span>
+              </button>
+            </li>
+          </ul>
+        </div>
 
         <p v-if="film.playback_status === 'ready'" class="shortcuts">
           On video: ←10s · play/pause · +10s · also
           <kbd>Space</kbd> <kbd>←</kbd><kbd>→</kbd> <kbd>M</kbd> <kbd>F</kbd>
           <template v-if="seriesNav && seriesNav.list.length > 1">
-            · series <kbd>P</kbd> prev · <kbd>N</kbd> next · <kbd>E</kbd> episodes
+            · series <kbd>P</kbd> prev · <kbd>N</kbd> next
           </template>
         </p>
         <RouterLink
@@ -1463,51 +1448,27 @@ video,
 
 .episodes {
   margin: 0 0 1.1rem;
-  border: 1px solid color-mix(in srgb, var(--cream) 22%, transparent);
-  border-radius: 0.35rem;
-  background: transparent;
-  overflow: hidden;
 }
 
-.episodes summary {
-  cursor: pointer;
-  padding: 0.75rem 1rem;
-  font-weight: 700;
+.episodes-title {
+  margin: 0 0 0.65rem;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
   color: var(--cream);
+}
+
+.episodes ul {
   list-style: none;
-}
-
-.episodes summary::-webkit-details-marker {
-  display: none;
-}
-
-.episodes summary::before {
-  content: '▸ ';
-  color: var(--accent);
-}
-
-.episodes[open] summary::before {
-  content: '▾ ';
-}
-
-.episodes summary kbd {
-  margin-left: 0.35rem;
-  padding: 0.08rem 0.35rem;
-  border: 1px solid color-mix(in srgb, var(--cream) 30%, transparent);
-  border-radius: 0.25rem;
-  font: inherit;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.ep-group {
-  padding: 0 0.75rem 0.85rem;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
 }
 
 .season-pick {
   display: grid;
   gap: 0.35rem;
-  margin: 0.35rem 0 0.65rem;
+  margin: 0 0 0.65rem;
   max-width: 18rem;
   font-size: 0.8rem;
   font-weight: 700;
@@ -1535,21 +1496,13 @@ video,
   color: var(--cream);
 }
 
-.ep-group h3 {
-  margin: 0.35rem 0 0.45rem;
+.season-label {
+  margin: 0 0 0.55rem;
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--accent);
-}
-
-.ep-group ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.35rem;
 }
 
 .ep-row {
