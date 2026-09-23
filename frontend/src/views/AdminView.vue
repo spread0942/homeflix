@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import ConversionsPanel from '../components/ConversionsPanel.vue'
 import {
   createAnimation,
@@ -14,11 +14,12 @@ import {
 } from '../api'
 
 const route = useRoute()
-const section = computed(() =>
-  route.name === 'admin-conversions' ? 'conversions' : 'upload',
-)
-
-const tab = ref('films') // 'films' | 'series'
+const router = useRouter()
+const section = computed(() => {
+  if (route.name === 'admin-series') return 'series'
+  if (route.name === 'admin-conversions') return 'conversions'
+  return 'films'
+})
 
 const films = ref([])
 const seriesList = ref([])
@@ -354,7 +355,7 @@ function resetSeriesForm() {
 }
 
 function startEditFilm(film) {
-  tab.value = 'films'
+  if (route.name !== 'admin-films') router.push({ name: 'admin-films' })
   editingFilmId.value = film.id
   name.value = film.name || ''
   description.value = film.description || ''
@@ -378,7 +379,7 @@ function cancelEditFilm() {
 }
 
 function startEditSeries(s) {
-  tab.value = 'series'
+  if (route.name !== 'admin-series') router.push({ name: 'admin-series' })
   editingSeriesId.value = s.id
   seriesName.value = s.name || ''
   seriesDescription.value = s.description || ''
@@ -602,44 +603,16 @@ function rowStatusLabel(row) {
 
 <template>
   <section class="admin">
-    <header class="intro">
-      <p class="eyebrow">Administration</p>
-      <h1>Admin</h1>
-      <p>
-        Upload and manage series or films (posters stored as <strong>WebP</strong>). Check conversion
-        status and retry failed jobs in the Conversions tab.
-      </p>
-    </header>
-
     <nav class="tabs" aria-label="Admin sections">
-      <RouterLink class="tab" :to="{ name: 'admin-upload' }">Upload</RouterLink>
+      <RouterLink class="tab" :to="{ name: 'admin-films' }">Films</RouterLink>
+      <RouterLink class="tab" :to="{ name: 'admin-series' }">Series</RouterLink>
       <RouterLink class="tab" :to="{ name: 'admin-conversions' }">Conversions</RouterLink>
     </nav>
 
-    <template v-if="section === 'upload'">
-      <nav class="tabs subtabs" aria-label="Upload sections">
-        <button
-          type="button"
-          class="tab"
-          :class="{ active: tab === 'films' }"
-          @click="tab = 'films'"
-        >
-          Films
-        </button>
-        <button
-          type="button"
-          class="tab"
-          :class="{ active: tab === 'series' }"
-          @click="tab = 'series'"
-        >
-          Series
-        </button>
-      </nav>
+    <p v-if="section !== 'conversions' && success" class="banner ok">{{ success }}</p>
+    <p v-if="section !== 'conversions' && error" class="banner err">{{ error }}</p>
 
-      <p v-if="success" class="banner ok">{{ success }}</p>
-      <p v-if="error" class="banner err">{{ error }}</p>
-
-    <div v-show="tab === 'films'" class="panel">
+    <div v-if="section === 'films'" class="panel">
       <!-- Edit existing film -->
       <form v-if="editingFilm" ref="filmFormEl" class="form" @submit="onSubmit">
         <h2>Edit film / episode</h2>
@@ -957,7 +930,7 @@ function rowStatusLabel(row) {
       </div>
     </div>
 
-    <div v-show="tab === 'series'" class="panel">
+    <div v-else-if="section === 'series'" class="panel">
       <form ref="seriesFormEl" class="form" @submit="onCreateSeries">
         <h2>{{ editingSeries ? 'Edit series' : 'New series' }}</h2>
         <label>
@@ -1045,7 +1018,6 @@ function rowStatusLabel(row) {
         <div v-else class="state">No series yet.</div>
       </div>
     </div>
-    </template>
 
     <ConversionsPanel v-else />
   </section>
@@ -1057,47 +1029,11 @@ function rowStatusLabel(row) {
   animation: fadeRise 0.55s ease both;
 }
 
-.intro {
-  max-width: 40rem;
-  margin-bottom: 1.25rem;
-}
-
-.eyebrow {
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-.intro h1 {
-  margin: 0.35rem 0 0.6rem;
-  font-family: var(--font-display);
-  font-size: clamp(2.2rem, 6vw, 3.4rem);
-  color: var(--cream);
-}
-
-.intro p {
-  margin: 0;
-  color: var(--ink);
-}
-
-.inline-link {
-  color: var(--accent);
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 1.25rem;
-}
-
-.tabs.subtabs {
-  margin-top: -0.35rem;
 }
 
 .tab {
@@ -1116,7 +1052,6 @@ function rowStatusLabel(row) {
   color: var(--accent);
 }
 
-.tab.active,
 .tab.router-link-active {
   background: transparent;
   border-color: var(--accent);
