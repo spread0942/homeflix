@@ -1,8 +1,8 @@
 :root {
   --accent-yellow: #c65f20;
-  --accent: #6f34ad;
+  --accent: #c65f20;
   --brown: #c65f20;
-  --teal: #6f34ad;
+  --teal: #c65f20;
   --cream: #ffffff;
   --ink: #ffffff;
   --on-light: #0a100d;
@@ -28,11 +28,7 @@ body {
 body {
   font-family: var(--font-body);
   color: var(--ink);
-  background:
-    radial-gradient(ellipse 110% 70% at 8% -5%, rgba(111, 52, 173, 0.45), transparent 55%),
-    radial-gradient(ellipse 90% 60% at 100% 5%, rgba(198, 95, 32, 0.32), transparent 50%),
-    radial-gradient(ellipse 80% 50% at 50% 100%, rgba(111, 52, 173, 0.2), transparent 55%),
-    linear-gradient(180deg, #121a16 0%, #0a100d 45%, #080c0a 100%);
+  background: linear-gradient(180deg, #101612 0%, var(--bg) 40%, #080c0a 100%);
   background-attachment: fixed;
 }
 
@@ -40,22 +36,6 @@ h1,
 h2,
 h3 {
   font-family: var(--font-display);
-}
-
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.08;
-  background-image: repeating-linear-gradient(
-    95deg,
-    transparent,
-    transparent 18px,
-    rgba(198, 95, 32, 0.4) 18px,
-    rgba(198, 95, 32, 0.4) 19px
-  );
-  z-index: 0;
 }
 
 #app {
@@ -99,15 +79,5 @@ img {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes softPulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.03);
   }
 }

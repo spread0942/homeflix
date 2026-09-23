@@ -223,7 +223,6 @@ onUnmounted(() => clearInterval(pollTimer))
   font-family: var(--font-display);
   font-size: clamp(2.2rem, 6vw, 3.4rem);
   color: var(--cream);
-  text-shadow: 0 3px 0 color-mix(in srgb, var(--brown) 50%, transparent);
 }
 
 .intro p {
@@ -241,10 +240,10 @@ onUnmounted(() => clearInterval(pollTimer))
 
 .stat {
   padding: 0.9rem 1rem;
-  border-radius: 0.85rem;
-  background: color-mix(in srgb, var(--cream) 90%, transparent);
-  border: 2px solid color-mix(in srgb, var(--brown) 22%, transparent);
-  color: var(--on-light);
+  border-radius: 0.35rem;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--cream) 22%, transparent);
+  color: var(--cream);
 }
 
 .stat strong {
@@ -252,12 +251,13 @@ onUnmounted(() => clearInterval(pollTimer))
   font-family: var(--font-display);
   font-size: 1.8rem;
   line-height: 1;
-  color: var(--brown);
+  color: var(--cream);
 }
 
 .stat span {
   font-size: 0.85rem;
   font-weight: 700;
+  color: color-mix(in srgb, var(--cream) 70%, transparent);
 }
 
 .stat.processing strong {
@@ -265,20 +265,21 @@ onUnmounted(() => clearInterval(pollTimer))
 }
 
 .stat.ready strong {
-  color: var(--teal);
+  color: var(--accent);
 }
 
 .stat.failed strong {
-  color: #8b1e1e;
+  color: #fde8e8;
 }
 
 .banner.err {
   margin: 0 0 1rem;
   padding: 0.85rem 1rem;
-  border-radius: 0.75rem;
+  border-radius: 0.35rem;
+  border: 1px solid #8b1e1e;
   font-weight: 700;
-  background: #fde8e8;
-  color: #8b1e1e;
+  background: transparent;
+  color: #fde8e8;
   max-width: 40rem;
 }
 
@@ -296,10 +297,10 @@ onUnmounted(() => clearInterval(pollTimer))
   gap: 1rem;
   align-items: center;
   padding: 0.85rem;
-  background: color-mix(in srgb, var(--cream) 92%, transparent);
-  border: 2px solid color-mix(in srgb, var(--brown) 25%, transparent);
-  border-radius: 0.95rem;
-  color: var(--on-light);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--cream) 22%, transparent);
+  border-radius: 0.35rem;
+  color: var(--cream);
 }
 
 .queue li.processing {
@@ -314,8 +315,8 @@ onUnmounted(() => clearInterval(pollTimer))
   width: 72px;
   height: 108px;
   object-fit: cover;
-  border-radius: 0.45rem;
-  border: 2px solid var(--brown);
+  border-radius: 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 25%, transparent);
 }
 
 .title-row {
@@ -328,14 +329,14 @@ onUnmounted(() => clearInterval(pollTimer))
 .title-row strong {
   font-family: var(--font-display);
   font-size: 1.15rem;
-  color: var(--brown);
+  color: var(--cream);
 }
 
 .badge {
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.25rem;
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -346,20 +347,22 @@ onUnmounted(() => clearInterval(pollTimer))
 }
 
 .badge.ready {
-  background: var(--teal);
-  color: var(--cream);
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
 }
 
 .badge.failed {
-  background: #8b1e1e;
-  color: #fff;
+  background: transparent;
+  border: 1px solid #8b1e1e;
+  color: #fde8e8;
 }
 
 .sub,
 .hint {
   margin: 0.3rem 0 0;
   font-size: 0.9rem;
-  color: color-mix(in srgb, var(--on-light) 70%, transparent);
+  color: color-mix(in srgb, var(--cream) 70%, transparent);
 }
 
 .hint {
@@ -369,8 +372,8 @@ onUnmounted(() => clearInterval(pollTimer))
 .bar {
   margin-top: 0.65rem;
   height: 0.45rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--brown) 18%, transparent);
+  border-radius: 0.2rem;
+  background: color-mix(in srgb, var(--cream) 15%, transparent);
   overflow: hidden;
 }
 
@@ -379,7 +382,7 @@ onUnmounted(() => clearInterval(pollTimer))
   height: 100%;
   width: 40%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent-yellow), var(--accent));
+  background: var(--accent);
   animation: slide 1.4s ease-in-out infinite;
 }
 
@@ -403,21 +406,21 @@ onUnmounted(() => clearInterval(pollTimer))
 .retry,
 .danger {
   padding: 0.35rem 0.7rem;
-  border-radius: 999px;
+  border-radius: 0.35rem;
   font-weight: 700;
   text-align: center;
   font-size: 0.85rem;
 }
 
 .actions a {
-  background: var(--teal);
+  background: var(--accent);
   color: var(--cream);
 }
 
 .actions a.ghost {
   background: transparent;
-  color: var(--teal);
-  border: 1px solid var(--teal);
+  color: var(--accent);
+  border: 1px solid var(--accent);
 }
 
 .retry {
@@ -439,9 +442,10 @@ onUnmounted(() => clearInterval(pollTimer))
 
 .state {
   padding: 1.25rem;
-  background: color-mix(in srgb, var(--cream) 88%, transparent);
-  border-radius: 0.85rem;
-  color: var(--on-light);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--cream) 25%, transparent);
+  border-radius: 0.35rem;
+  color: var(--cream);
 }
 
 .foot {

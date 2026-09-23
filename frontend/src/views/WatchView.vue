@@ -1024,39 +1024,40 @@ onUnmounted(() => {
 .banner {
   margin-bottom: 1rem;
   padding: 0.85rem 1rem;
-  border-radius: 0.75rem;
+  border-radius: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   font-weight: 700;
-  background: color-mix(in srgb, var(--teal) 18%, var(--cream));
-  color: var(--teal);
+  background: transparent;
+  color: var(--accent);
 }
 
 .banner.err {
-  background: #fde8e8;
-  color: #8b1e1e;
+  border-color: #8b1e1e;
+  background: transparent;
+  color: #fde8e8;
 }
 
 .player-shell {
   position: relative;
-  border-radius: 1rem;
-  border: 3px solid var(--brown);
+  border-radius: 0.35rem;
+  border: 1px solid var(--brown);
   background: #111;
-  box-shadow: 0 16px 40px var(--shadow);
   overflow: visible;
 }
 
 .video-frame {
   position: relative;
   overflow: hidden;
-  border-radius: 0.85rem 0.85rem 0 0;
+  border-radius: 0.3rem 0.3rem 0 0;
   background: #000;
 }
 
 .player-shell:not(.console) .video-frame {
-  border-radius: 0.85rem;
+  border-radius: 0.3rem;
 }
 
 .player-shell.console .video-frame {
-  border-radius: 0.85rem 0.85rem 0 0;
+  border-radius: 0.3rem 0.3rem 0 0;
 }
 
 video,
@@ -1075,8 +1076,7 @@ video,
   background-position: center;
   color: var(--cream);
   font-weight: 700;
-  text-shadow: 0 2px 8px #000;
-  border-radius: 0.85rem;
+  border-radius: 0.3rem;
 }
 
 .film-bar {
@@ -1084,9 +1084,9 @@ video,
   flex-direction: column;
   gap: 0.55rem;
   padding: 0.75rem 0.85rem 0.9rem;
-  background: #1a1410;
-  border-top: 2px solid var(--brown);
-  border-radius: 0 0 0.75rem 0.75rem;
+  background: #121212;
+  border-top: 1px solid var(--brown);
+  border-radius: 0 0 0.3rem 0.3rem;
 }
 
 .film-bar:focus {
@@ -1111,26 +1111,27 @@ video,
   min-width: 3rem;
   min-height: 2.75rem;
   padding: 0.45rem 0.7rem;
-  border: 2px solid var(--brown);
-  border-radius: 0.55rem;
+  border: 1px solid var(--brown);
+  border-radius: 0.35rem;
   background: var(--accent);
   color: var(--cream);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 0.9rem;
 }
 
 .film-btn.play {
   min-width: 3.6rem;
-  background: #c65f20;
+  background: var(--accent);
 }
 
 .film-btn.episode {
-  background: #4a2a78;
+  background: transparent;
+  color: var(--cream);
 }
 
 .film-btn.mark {
-  background: #2a221c;
-  border-color: #6a5648;
+  background: transparent;
+  border-color: color-mix(in srgb, var(--cream) 35%, transparent);
   font-size: 0.85rem;
 }
 
@@ -1143,9 +1144,9 @@ video,
   position: relative;
   width: 100%;
   height: 1.85rem;
-  border-radius: 999px;
-  background: #4a3b32;
-  border: 2px solid #6a5648;
+  border-radius: 0.25rem;
+  background: #2a2a2a;
+  border: 1px solid color-mix(in srgb, var(--cream) 25%, transparent);
   overflow: hidden;
   cursor: pointer;
   touch-action: none;
@@ -1226,27 +1227,25 @@ video,
   gap: 0.1rem;
   width: clamp(3.2rem, 8vw, 4.2rem);
   height: clamp(3.2rem, 8vw, 4.2rem);
-  border: 2px solid rgba(255, 248, 231, 0.55);
-  border-radius: 50%;
-  background: rgba(42, 26, 16, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 0.35rem;
+  background: rgba(0, 0, 0, 0.55);
   color: var(--cream);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .ctl:hover,
 .ctl:focus-visible {
-  transform: scale(1.06);
-  background: rgba(232, 93, 4, 0.9);
-  border-color: var(--accent-yellow);
+  background: color-mix(in srgb, var(--accent) 85%, #000);
+  border-color: var(--accent);
   outline: none;
 }
 
 .ctl.play {
   width: clamp(4rem, 10vw, 5.2rem);
   height: clamp(4rem, 10vw, 5.2rem);
-  background: rgba(232, 93, 4, 0.88);
-  border-color: var(--accent-yellow);
+  background: color-mix(in srgb, var(--accent) 88%, #000);
+  border-color: var(--accent);
 }
 
 .icon {
@@ -1269,10 +1268,10 @@ video,
   top: 50%;
   transform: translateY(-50%) scale(0.9);
   padding: 0.55rem 0.9rem;
-  border-radius: 999px;
-  background: rgba(42, 26, 16, 0.75);
-  color: var(--accent-yellow);
-  font-weight: 800;
+  border-radius: 0.35rem;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--accent);
+  font-weight: 700;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
@@ -1294,11 +1293,10 @@ video,
 .details {
   margin-top: 1.5rem;
   max-width: 48rem;
-  padding: 1.25rem 1.4rem;
-  background: color-mix(in srgb, var(--cream) 90%, transparent);
-  border: 2px solid color-mix(in srgb, var(--brown) 28%, transparent);
-  border-radius: 1rem;
-  color: var(--on-light);
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--ink);
 }
 
 .eyebrow {
@@ -1307,54 +1305,54 @@ video,
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--teal);
+  color: var(--accent);
 }
 
 .details h1 {
   margin: 0.35rem 0 0.75rem;
   font-family: var(--font-display);
   font-size: clamp(1.8rem, 4vw, 2.6rem);
-  color: var(--brown);
+  color: var(--cream);
 }
 
 .desc {
   margin: 0 0 1rem;
   line-height: 1.55;
+  color: color-mix(in srgb, var(--cream) 80%, transparent);
 }
 
 .shortcuts {
   margin: 0 0 1rem;
   font-size: 0.9rem;
-  font-weight: 700;
-  color: color-mix(in srgb, var(--on-light) 70%, transparent);
+  font-weight: 600;
+  color: color-mix(in srgb, var(--cream) 65%, transparent);
 }
 
 .shortcuts kbd {
   display: inline-block;
   margin: 0 0.1rem;
   padding: 0.12rem 0.4rem;
-  border: 1px solid color-mix(in srgb, var(--brown) 35%, transparent);
-  border-bottom-width: 2px;
-  border-radius: 0.35rem;
-  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--cream) 30%, transparent);
+  border-radius: 0.25rem;
+  background: transparent;
   font: inherit;
   font-size: 0.8rem;
-  color: var(--brown);
+  color: var(--cream);
 }
 
 .series-line {
   margin: 0 0 0.75rem;
   font-weight: 700;
-  color: var(--teal);
+  color: color-mix(in srgb, var(--cream) 85%, transparent);
 }
 
 .ep-pos {
   font-weight: 600;
-  color: color-mix(in srgb, var(--on-light) 55%, transparent);
+  color: color-mix(in srgb, var(--cream) 55%, transparent);
 }
 
 .series-link {
-  color: var(--teal);
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -1377,12 +1375,12 @@ video,
   gap: 0.65rem;
   min-height: 3.1rem;
   padding: 0.55rem 0.85rem;
-  border: 2px solid color-mix(in srgb, var(--brown) 28%, transparent);
-  border-radius: 0.75rem;
-  background: #fff;
-  color: var(--brown);
+  border: 1px solid color-mix(in srgb, var(--cream) 28%, transparent);
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--cream);
   text-align: left;
-  transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 .nav-btn.next {
@@ -1393,9 +1391,8 @@ video,
 .nav-btn:hover:not(:disabled),
 .nav-btn:focus-visible:not(:disabled) {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent-yellow) 22%, #fff);
+  color: var(--accent);
   outline: none;
-  transform: translateY(-1px);
 }
 
 .nav-btn:disabled {
@@ -1412,10 +1409,10 @@ video,
 
 .nav-kind {
   font-size: 0.7rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--teal);
+  color: var(--accent);
 }
 
 .nav-title {
@@ -1428,17 +1425,17 @@ video,
 
 .episodes {
   margin: 0 0 1.1rem;
-  border: 2px solid color-mix(in srgb, var(--brown) 22%, transparent);
-  border-radius: 0.75rem;
-  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--cream) 22%, transparent);
+  border-radius: 0.35rem;
+  background: transparent;
   overflow: hidden;
 }
 
 .episodes summary {
   cursor: pointer;
   padding: 0.75rem 1rem;
-  font-weight: 800;
-  color: var(--brown);
+  font-weight: 700;
+  color: var(--cream);
   list-style: none;
 }
 
@@ -1458,8 +1455,8 @@ video,
 .episodes summary kbd {
   margin-left: 0.35rem;
   padding: 0.08rem 0.35rem;
-  border: 1px solid color-mix(in srgb, var(--brown) 30%, transparent);
-  border-radius: 0.3rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 30%, transparent);
+  border-radius: 0.25rem;
   font: inherit;
   font-size: 0.75rem;
   font-weight: 700;
@@ -1472,10 +1469,10 @@ video,
 .ep-group h3 {
   margin: 0.35rem 0 0.45rem;
   font-size: 0.8rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--teal);
+  color: var(--accent);
 }
 
 .ep-group ul {
@@ -1494,9 +1491,9 @@ video,
   gap: 0.4rem 0.65rem;
   padding: 0.55rem 0.65rem;
   border: 1px solid transparent;
-  border-radius: 0.5rem;
-  background: color-mix(in srgb, var(--cream) 70%, #fff);
-  color: var(--on-light);
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--cream);
   text-align: left;
 }
 
@@ -1507,8 +1504,8 @@ video,
 }
 
 .ep-row.current {
-  border-color: var(--teal);
-  background: color-mix(in srgb, var(--teal) 12%, #fff);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .ep-row.disabled:not(.current) {
@@ -1517,8 +1514,8 @@ video,
 
 .ep-tag {
   font-size: 0.75rem;
-  font-weight: 800;
-  color: var(--teal);
+  font-weight: 700;
+  color: var(--accent);
   flex-shrink: 0;
 }
 
@@ -1533,7 +1530,7 @@ video,
 .ep-status,
 .ep-viewed {
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -1543,11 +1540,11 @@ video,
 }
 
 .ep-viewed {
-  color: var(--teal);
+  color: color-mix(in srgb, var(--cream) 70%, transparent);
 }
 
 .ep-status {
-  color: color-mix(in srgb, var(--on-light) 55%, transparent);
+  color: color-mix(in srgb, var(--cream) 55%, transparent);
 }
 
 .up-next {
@@ -1557,21 +1554,20 @@ video,
   z-index: 3;
   max-width: min(22rem, calc(100% - 2rem));
   padding: 1rem 1.1rem;
-  border-radius: 0.85rem;
-  border: 2px solid var(--accent-yellow);
-  background: rgba(42, 26, 16, 0.92);
+  border-radius: 0.35rem;
+  border: 1px solid var(--accent);
+  background: rgba(10, 16, 13, 0.94);
   color: var(--cream);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
   animation: fadeRise 0.35s ease both;
 }
 
 .up-next-label {
   margin: 0 0 0.25rem;
   font-size: 0.75rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--accent-yellow);
+  color: var(--accent);
 }
 
 .up-next strong {
@@ -1591,8 +1587,8 @@ video,
 .up-next-play,
 .up-next-cancel {
   padding: 0.45rem 0.85rem;
-  border-radius: 0.5rem;
-  font-weight: 800;
+  border-radius: 0.35rem;
+  font-weight: 700;
 }
 
 a.up-next-play {
@@ -1626,13 +1622,15 @@ a.up-next-play {
 
 .state {
   padding: 2rem;
-  background: color-mix(in srgb, var(--cream) 88%, transparent);
-  border-radius: 1rem;
-  color: var(--on-light);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--cream) 25%, transparent);
+  border-radius: 0.35rem;
+  color: var(--cream);
 }
 
 .state.error {
-  color: #8b1e1e;
+  color: #fde8e8;
+  border-color: #8b1e1e;
 }
 
 .player-shell:fullscreen,

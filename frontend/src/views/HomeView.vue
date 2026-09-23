@@ -211,7 +211,6 @@ function statusBadge(item) {
   font-size: clamp(3rem, 10vw, 5.5rem);
   line-height: 0.95;
   color: var(--cream);
-  text-shadow: 0 4px 0 color-mix(in srgb, var(--brown) 55%, transparent);
 }
 
 .tagline {
@@ -228,19 +227,20 @@ function statusBadge(item) {
 .search input {
   width: min(100%, 34rem);
   padding: 0.9rem 1.15rem;
-  border: 2px solid var(--brown);
-  border-radius: 999px;
-  background: var(--foam);
-  color: var(--on-light);
+  border: 1px solid color-mix(in srgb, var(--cream) 30%, transparent);
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--cream);
   outline: none;
-  box-shadow: 0 8px 24px var(--shadow);
-  transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
+  transition: border-color 0.15s ease;
 }
 
 .search input:focus {
   border-color: var(--accent);
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px var(--shadow);
+}
+
+.search input::placeholder {
+  color: color-mix(in srgb, var(--cream) 50%, transparent);
 }
 
 .continue {
@@ -282,8 +282,13 @@ function statusBadge(item) {
 
 .continue-card:hover,
 .continue-card:focus-visible {
-  transform: translateY(-4px);
+  transform: none;
   outline: none;
+}
+
+.continue-card:hover .meta h3,
+.continue-card:focus-visible .meta h3 {
+  color: var(--accent);
 }
 
 .library {
@@ -292,14 +297,15 @@ function statusBadge(item) {
 
 .state {
   padding: 2rem;
-  background: color-mix(in srgb, var(--cream) 88%, transparent);
-  border: 2px solid color-mix(in srgb, var(--brown) 30%, transparent);
-  border-radius: 1rem;
-  color: var(--on-light);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--cream) 25%, transparent);
+  border-radius: 0.35rem;
+  color: var(--cream);
 }
 
 .state.error {
-  color: #8b1e1e;
+  color: #fde8e8;
+  border-color: #8b1e1e;
 }
 
 .grid {
@@ -323,25 +329,29 @@ function statusBadge(item) {
 
 .card:hover,
 .card:focus-visible {
-  transform: translateY(-6px);
+  transform: none;
   outline: none;
+}
+
+.card:hover .meta h2,
+.card:focus-visible .meta h2 {
+  color: var(--accent);
 }
 
 .poster-wrap {
   position: relative;
   aspect-ratio: 2 / 3;
   overflow: hidden;
-  border-radius: 0.85rem;
-  border: 3px solid var(--brown);
-  background: var(--cream);
-  box-shadow: 0 10px 0 color-mix(in srgb, var(--brown) 35%, transparent);
+  border-radius: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 25%, transparent);
+  background: #121212;
 }
 
 .poster-wrap img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.35s ease;
+  transition: opacity 0.2s ease;
 }
 
 .poster-fallback {
@@ -350,21 +360,21 @@ function statusBadge(item) {
   display: grid;
   place-items: center;
   font-size: 3rem;
-  background: linear-gradient(160deg, var(--accent-yellow), var(--teal));
+  background: color-mix(in srgb, var(--accent) 55%, #121212);
   color: var(--cream);
 }
 
 .card:hover .poster-wrap img,
 .continue-card:hover .poster-wrap img {
-  transform: scale(1.05);
+  opacity: 0.9;
 }
 
 .badge {
   position: absolute;
   top: 0.5rem;
   left: 0.5rem;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.25rem;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -374,7 +384,7 @@ function statusBadge(item) {
 }
 
 .badge.done {
-  background: var(--teal);
+  background: var(--accent);
 }
 
 .badge.viewed {
@@ -382,7 +392,7 @@ function statusBadge(item) {
 }
 
 .card.completed .poster-wrap {
-  box-shadow: 0 10px 0 color-mix(in srgb, var(--teal) 40%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .card.completed .poster-wrap::after {
@@ -391,7 +401,7 @@ function statusBadge(item) {
   inset: 0;
   background: linear-gradient(
     to top,
-    color-mix(in srgb, var(--teal) 28%, transparent),
+    color-mix(in srgb, var(--accent) 22%, transparent),
     transparent 42%
   );
   pointer-events: none;

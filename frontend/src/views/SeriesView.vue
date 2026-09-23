@@ -256,10 +256,9 @@ const viewedCount = computed(() => {
   aspect-ratio: 2 / 3;
   max-width: 180px;
   overflow: hidden;
-  border-radius: 0.85rem;
-  border: 3px solid var(--brown);
-  box-shadow: 0 10px 0 color-mix(in srgb, var(--brown) 35%, transparent);
-  background: var(--cream);
+  border-radius: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 25%, transparent);
+  background: #121212;
 }
 
 .poster img {
@@ -274,7 +273,8 @@ const viewedCount = computed(() => {
   display: grid;
   place-items: center;
   font-size: 3rem;
-  background: linear-gradient(160deg, var(--accent-yellow), var(--teal));
+  background: color-mix(in srgb, var(--accent) 55%, #121212);
+  color: var(--cream);
 }
 
 .eyebrow {
@@ -283,7 +283,7 @@ const viewedCount = computed(() => {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--brown);
+  color: var(--accent);
 }
 
 .copy h1 {
@@ -291,7 +291,6 @@ const viewedCount = computed(() => {
   font-family: var(--font-display);
   font-size: clamp(2rem, 5vw, 3.2rem);
   color: var(--cream);
-  text-shadow: 0 3px 0 color-mix(in srgb, var(--brown) 50%, transparent);
 }
 
 .desc {
@@ -303,8 +302,8 @@ const viewedCount = computed(() => {
 
 .complete-note {
   margin: 0 0 0.85rem;
-  font-weight: 800;
-  color: var(--teal);
+  font-weight: 700;
+  color: var(--accent);
 }
 
 .hero-actions {
@@ -317,17 +316,15 @@ const viewedCount = computed(() => {
 .play-cta {
   padding: 0.65rem 1.15rem;
   border: none;
-  border-radius: 999px;
+  border-radius: 0.35rem;
   background: var(--accent);
   color: var(--cream);
-  font-weight: 800;
-  box-shadow: 0 4px 0 color-mix(in srgb, var(--accent-yellow) 55%, transparent);
-  transition: transform 0.15s ease, background 0.15s ease;
+  font-weight: 700;
+  transition: background 0.15s ease;
 }
 
 .play-cta:hover,
 .play-cta:focus-visible {
-  transform: translateY(-1px);
   background: color-mix(in srgb, var(--accent) 85%, #000);
   outline: none;
 }
@@ -363,10 +360,10 @@ const viewedCount = computed(() => {
 .season-pick select {
   width: 100%;
   padding: 0.65rem 0.85rem;
-  border: 2px solid color-mix(in srgb, var(--brown) 40%, transparent);
-  border-radius: 0.65rem;
-  background: color-mix(in srgb, var(--cream) 92%, transparent);
-  color: var(--on-light);
+  border: 1px solid color-mix(in srgb, var(--cream) 30%, transparent);
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--cream);
   font-weight: 700;
 }
 
@@ -385,26 +382,24 @@ const viewedCount = computed(() => {
   gap: 0.85rem;
   align-items: center;
   padding: 0.65rem;
-  border: 2px solid color-mix(in srgb, var(--brown) 25%, transparent);
-  border-radius: 0.85rem;
-  background: color-mix(in srgb, var(--cream) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cream) 22%, transparent);
+  border-radius: 0.35rem;
+  background: transparent;
   text-align: left;
-  color: var(--on-light);
-  transition: transform 0.2s ease, border-color 0.2s ease;
+  color: var(--cream);
+  transition: border-color 0.15s ease;
 }
 
 .row:hover {
-  transform: translateX(4px);
   border-color: var(--accent);
 }
 
 .row.resume {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .row.viewed {
-  border-color: color-mix(in srgb, var(--teal) 55%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .thumb {
@@ -417,8 +412,8 @@ const viewedCount = computed(() => {
   width: 56px;
   height: 84px;
   object-fit: cover;
-  border-radius: 0.35rem;
-  border: 2px solid var(--brown);
+  border-radius: 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 25%, transparent);
   display: block;
 }
 
@@ -433,7 +428,7 @@ const viewedCount = computed(() => {
 
 .ep-progress-fill {
   height: 100%;
-  background: var(--accent-yellow);
+  background: var(--accent);
 }
 
 .ep {
@@ -441,7 +436,7 @@ const viewedCount = computed(() => {
   margin-bottom: 0.2rem;
   font-size: 0.75rem;
   font-weight: 700;
-  color: var(--teal);
+  color: var(--accent);
 }
 
 .resume-mark,
@@ -449,9 +444,9 @@ const viewedCount = computed(() => {
   display: inline-block;
   margin-top: 0.35rem;
   padding: 0.15rem 0.45rem;
-  border-radius: 999px;
+  border-radius: 0.25rem;
   font-size: 0.7rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -462,20 +457,21 @@ const viewedCount = computed(() => {
 }
 
 .viewed-mark {
-  background: var(--teal);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--cream) 35%, transparent);
   color: var(--cream);
 }
 
 .meta strong {
   display: block;
   font-family: var(--font-display);
-  color: var(--brown);
+  color: var(--cream);
 }
 
 .meta p {
   margin: 0.25rem 0 0;
   font-size: 0.9rem;
-  color: color-mix(in srgb, var(--on-light) 70%, transparent);
+  color: color-mix(in srgb, var(--cream) 70%, transparent);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -484,9 +480,10 @@ const viewedCount = computed(() => {
 
 .state {
   padding: 1.5rem;
-  background: color-mix(in srgb, var(--cream) 88%, transparent);
-  border-radius: 1rem;
-  color: var(--on-light);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--cream) 25%, transparent);
+  border-radius: 0.35rem;
+  color: var(--cream);
 }
 
 .state.error {

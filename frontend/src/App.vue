@@ -64,34 +64,32 @@ const isHome = computed(() => route.name === 'home')
   place-items: center;
   width: 2.1rem;
   height: 2.1rem;
-  border-radius: 50%;
+  border-radius: 0.35rem;
   background: var(--accent);
   color: var(--cream);
   font-size: 0.75rem;
-  box-shadow: 0 4px 0 color-mix(in srgb, var(--accent-yellow) 55%, transparent);
-  animation: softPulse 4s ease-in-out infinite;
 }
 
 .nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.25rem 1rem;
   justify-content: flex-end;
 }
 
 .nav a {
-  padding: 0.45rem 0.9rem;
-  border-radius: 999px;
-  font-weight: 700;
+  padding: 0.35rem 0;
+  border-bottom: 2px solid transparent;
+  font-weight: 600;
   color: var(--cream);
-  background: var(--teal);
-  transition: transform 0.2s ease, background 0.2s ease;
+  background: transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
 
 .nav a:hover,
 .nav a.router-link-active {
-  background: var(--accent);
-  transform: translateY(-1px);
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 main {

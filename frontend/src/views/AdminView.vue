@@ -1070,7 +1070,6 @@ function rowStatusLabel(row) {
   font-family: var(--font-display);
   font-size: clamp(2.2rem, 6vw, 3.4rem);
   color: var(--cream);
-  text-shadow: 0 3px 0 color-mix(in srgb, var(--brown) 50%, transparent);
 }
 
 .intro p {
@@ -1080,7 +1079,7 @@ function rowStatusLabel(row) {
 
 .inline-link {
   color: var(--accent);
-  font-weight: 800;
+  font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -1093,16 +1092,17 @@ function rowStatusLabel(row) {
 
 .tab {
   padding: 0.55rem 1.15rem;
-  border: 2px solid color-mix(in srgb, var(--brown) 35%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--cream) 85%, transparent);
-  color: var(--brown);
-  font-weight: 800;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  border: 1px solid color-mix(in srgb, var(--cream) 30%, transparent);
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--cream);
+  font-weight: 700;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .tab:hover {
   border-color: var(--accent);
+  color: var(--accent);
 }
 
 .tab.active {
@@ -1115,9 +1115,9 @@ function rowStatusLabel(row) {
   display: inline-block;
   margin-right: 0.35rem;
   padding: 0.1rem 0.45rem;
-  border-radius: 999px;
+  border-radius: 0.25rem;
   font-size: 0.7rem;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   vertical-align: middle;
@@ -1126,20 +1126,22 @@ function rowStatusLabel(row) {
 .status-pill.ready,
 .status-pill.pending,
 .status-pill.done {
-  background: color-mix(in srgb, var(--teal) 25%, transparent);
-  color: var(--teal);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
 }
 
 .status-pill.processing,
 .status-pill.uploading {
-  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--accent);
 }
 
 .status-pill.failed,
 .status-pill.error {
-  background: #fde8e8;
-  color: #8b1e1e;
+  background: transparent;
+  border: 1px solid #8b1e1e;
+  color: #fde8e8;
 }
 
 .form,
@@ -1148,9 +1150,9 @@ function rowStatusLabel(row) {
   gap: 1rem;
   padding: 1.25rem;
   margin-bottom: 1.25rem;
-  background: color-mix(in srgb, var(--cream) 92%, transparent);
-  border: 2px solid color-mix(in srgb, var(--brown) 30%, transparent);
-  border-radius: 1rem;
+  background: color-mix(in srgb, var(--cream) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brown) 30%, transparent);
+  border-radius: 0.35rem;
   color: var(--on-light);
 }
 
@@ -1180,7 +1182,7 @@ label {
 .field-note {
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--teal);
+  color: var(--accent);
 }
 
 input,
@@ -1188,8 +1190,8 @@ textarea,
 select {
   width: 100%;
   padding: 0.7rem 0.85rem;
-  border: 2px solid color-mix(in srgb, var(--brown) 40%, transparent);
-  border-radius: 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--brown) 40%, transparent);
+  border-radius: 0.35rem;
   background: #fff;
   color: var(--on-light);
 }
@@ -1216,7 +1218,7 @@ select {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--teal);
+  color: var(--accent);
 }
 
 .hint code {
@@ -1236,16 +1238,15 @@ select {
   justify-self: start;
   padding: 0.75rem 1.4rem;
   border: none;
-  border-radius: 999px;
+  border-radius: 0.35rem;
   font-weight: 700;
   color: var(--cream);
   background: var(--accent);
-  box-shadow: 0 4px 0 color-mix(in srgb, var(--brown) 55%, transparent);
-  transition: transform 0.2s ease;
+  transition: background 0.15s ease;
 }
 
 .submit:hover:not(:disabled) {
-  transform: translateY(-2px);
+  background: color-mix(in srgb, var(--accent) 85%, #000);
 }
 
 .submit:disabled {
@@ -1255,8 +1256,8 @@ select {
 
 .cancel {
   padding: 0.75rem 1.2rem;
-  border: 2px solid color-mix(in srgb, var(--brown) 40%, transparent);
-  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--brown) 40%, transparent);
+  border-radius: 0.35rem;
   font-weight: 700;
   color: var(--brown);
   background: transparent;
@@ -1270,18 +1271,21 @@ select {
 .banner {
   margin: 0 0 1rem;
   padding: 0.85rem 1rem;
-  border-radius: 0.75rem;
+  border-radius: 0.35rem;
+  border: 1px solid transparent;
   font-weight: 700;
   max-width: 40rem;
 }
 
 .banner.ok {
-  background: color-mix(in srgb, var(--teal) 20%, var(--cream));
-  color: var(--teal);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
 }
 
 .banner.err {
-  background: #fde8e8;
+  background: transparent;
+  border-color: #8b1e1e;
   color: #8b1e1e;
 }
 
@@ -1397,8 +1401,8 @@ select {
 
 .preview-after::before {
   content: '→ ';
-  color: var(--teal);
-  font-weight: 800;
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .batch-empty {
@@ -1412,8 +1416,8 @@ select {
 
 .batch-table-wrap {
   overflow-x: auto;
-  border-radius: 0.75rem;
-  border: 2px solid color-mix(in srgb, var(--brown) 25%, transparent);
+  border-radius: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--brown) 25%, transparent);
   background: #fff;
 }
 
@@ -1531,10 +1535,10 @@ select {
   gap: 0.9rem;
   align-items: center;
   padding: 0.75rem;
-  background: color-mix(in srgb, var(--cream) 90%, transparent);
-  border: 2px solid color-mix(in srgb, var(--brown) 25%, transparent);
-  border-radius: 0.85rem;
-  color: var(--on-light);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--cream) 22%, transparent);
+  border-radius: 0.35rem;
+  color: var(--cream);
 }
 
 .list img,
@@ -1542,21 +1546,21 @@ select {
   width: 64px;
   height: 96px;
   object-fit: cover;
-  border-radius: 0.4rem;
-  border: 2px solid var(--brown);
+  border-radius: 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 25%, transparent);
 }
 
 .thumb-fallback {
   display: grid;
   place-items: center;
-  background: linear-gradient(160deg, var(--accent-yellow), var(--teal));
+  background: color-mix(in srgb, var(--accent) 55%, #121212);
   font-size: 1.5rem;
 }
 
 .list p {
   margin: 0.25rem 0 0;
   font-size: 0.9rem;
-  color: color-mix(in srgb, var(--on-light) 70%, transparent);
+  color: color-mix(in srgb, var(--cream) 70%, transparent);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1565,6 +1569,7 @@ select {
 
 .list strong {
   font-family: var(--font-display);
+  color: var(--cream);
 }
 
 .actions {
@@ -1577,21 +1582,21 @@ select {
 .edit,
 .danger {
   padding: 0.35rem 0.7rem;
-  border-radius: 999px;
+  border-radius: 0.35rem;
   font-weight: 700;
   text-align: center;
   font-size: 0.85rem;
 }
 
 .actions a {
-  background: var(--teal);
+  background: var(--accent);
   color: var(--cream);
 }
 
 .edit {
-  background: color-mix(in srgb, var(--accent-yellow) 70%, #fff);
-  color: var(--brown);
-  border: 1px solid color-mix(in srgb, var(--brown) 35%, transparent);
+  background: transparent;
+  color: var(--cream);
+  border: 1px solid color-mix(in srgb, var(--cream) 35%, transparent);
 }
 
 .danger {
@@ -1602,9 +1607,10 @@ select {
 
 .state {
   padding: 1.25rem;
-  background: color-mix(in srgb, var(--cream) 88%, transparent);
-  border-radius: 0.85rem;
-  color: var(--on-light);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--cream) 25%, transparent);
+  border-radius: 0.35rem;
+  color: var(--cream);
 }
 
 @media (max-width: 560px) {
