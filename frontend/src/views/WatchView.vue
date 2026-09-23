@@ -123,6 +123,36 @@ const nextPlayable = computed(() => {
 
 const seasonGroups = computed(() => groupBySeason(series.value?.entries || []))
 
+const selectedSeasonKey = ref('')
+
+watch(
+  [seasonGroups, film],
+  ([groups, current]) => {
+    if (!groups.length) {
+      selectedSeasonKey.value = ''
+      return
+    }
+    if (current) {
+      const key = current.season == null ? 'parts' : `season-${current.season}`
+      if (groups.some((g) => g.key === key)) {
+        selectedSeasonKey.value = key
+        return
+      }
+    }
+    if (!groups.some((g) => g.key === selectedSeasonKey.value)) {
+      selectedSeasonKey.value = groups[0].key
+    }
+  },
+  { immediate: true },
+)
+
+const activeSeason = computed(
+  () =>
+    seasonGroups.value.find((g) => g.key === selectedSeasonKey.value) ||
+    seasonGroups.value[0] ||
+    null,
+)
+
 const episodePosition = computed(() => {
   const nav = seriesNav.value
   if (!nav || nav.index < 0) return null
@@ -958,10 +988,18 @@ onUnmounted(() => {
           @toggle="episodesOpen = $event.target.open"
         >
           <summary>Episodes <kbd>E</kbd></summary>
-          <div v-for="group in seasonGroups" :key="group.key" class="ep-group">
-            <h3>{{ group.label }}</h3>
+          <div v-if="activeSeason" class="ep-group">
+            <label v-if="seasonGroups.length > 1" class="season-pick">
+              Season
+              <select v-model="selectedSeasonKey" aria-label="Select season">
+                <option v-for="group in seasonGroups" :key="group.key" :value="group.key">
+                  {{ group.label }} ({{ group.entries.length }})
+                </option>
+              </select>
+            </label>
+            <h3 v-else>{{ activeSeason.label }}</h3>
             <ul>
-              <li v-for="entry in group.entries" :key="entry.id">
+              <li v-for="entry in activeSeason.entries" :key="entry.id">
                 <button
                   type="button"
                   class="ep-row"
@@ -1464,6 +1502,37 @@ video,
 
 .ep-group {
   padding: 0 0.75rem 0.85rem;
+}
+
+.season-pick {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.35rem 0 0.65rem;
+  max-width: 18rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.season-pick select {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 28%, transparent);
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--cream);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.season-pick select option {
+  background: var(--bg);
+  color: var(--cream);
 }
 
 .ep-group h3 {
