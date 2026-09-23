@@ -15,8 +15,12 @@ const isHome = computed(() => route.name === 'home')
       </RouterLink>
       <nav class="nav">
         <RouterLink to="/">Library</RouterLink>
-        <RouterLink to="/conversions">Conversions</RouterLink>
-        <RouterLink to="/admin">Admin</RouterLink>
+        <RouterLink
+          to="/admin"
+          :class="{ 'router-link-active': route.path.startsWith('/admin') }"
+        >
+          Admin
+        </RouterLink>
       </nav>
     </header>
     <main>

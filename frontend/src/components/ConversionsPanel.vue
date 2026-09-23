@@ -106,14 +106,11 @@ onUnmounted(() => clearInterval(pollTimer))
 </script>
 
 <template>
-  <section class="conversions">
-    <header class="intro">
-      <p class="eyebrow">Transcoding</p>
-      <h1>Conversions</h1>
-      <p>
-        Live queue for browser playback. Unsupported uploads (MKV, HEVC, …) become H.264 MP4 here.
-      </p>
-    </header>
+  <div class="conversions-panel">
+    <p class="lede">
+      Live queue for browser playback. Unsupported uploads (MKV, HEVC, …) become H.264 MP4 here.
+      Auto-refreshes every 4s.
+    </p>
 
     <div class="stats">
       <div class="stat processing">
@@ -160,11 +157,7 @@ onUnmounted(() => clearInterval(pollTimer))
           >
             Watch
           </RouterLink>
-          <RouterLink
-            v-else
-            class="ghost"
-            :to="{ name: 'watch', params: { id: film.id } }"
-          >
+          <RouterLink v-else class="ghost" :to="{ name: 'watch', params: { id: film.id } }">
             Open
           </RouterLink>
           <button
@@ -189,45 +182,16 @@ onUnmounted(() => clearInterval(pollTimer))
         </div>
       </li>
     </ul>
-    <div v-else class="state">No films yet. Upload from Admin.</div>
-
-    <p class="foot">
-      <RouterLink to="/admin">← Back to Admin</RouterLink>
-      · Auto-refreshes every 4s
-    </p>
-  </section>
+    <div v-else class="state">No films yet. Upload from the Upload tab.</div>
+  </div>
 </template>
 
 <style scoped>
-.conversions {
-  padding: 0.5rem clamp(1rem, 4vw, 3rem) 3rem;
-  animation: fadeRise 0.55s ease both;
-}
-
-.intro {
+.lede {
+  margin: 0 0 1.25rem;
   max-width: 42rem;
-  margin-bottom: 1.5rem;
-}
-
-.eyebrow {
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--brown);
-}
-
-.intro h1 {
-  margin: 0.35rem 0 0.6rem;
-  font-family: var(--font-display);
-  font-size: clamp(2.2rem, 6vw, 3.4rem);
-  color: var(--cream);
-}
-
-.intro p {
-  margin: 0;
-  color: var(--ink);
+  color: color-mix(in srgb, var(--cream) 72%, transparent);
+  font-weight: 600;
 }
 
 .stats {
@@ -260,10 +224,7 @@ onUnmounted(() => clearInterval(pollTimer))
   color: color-mix(in srgb, var(--cream) 70%, transparent);
 }
 
-.stat.processing strong {
-  color: var(--accent);
-}
-
+.stat.processing strong,
 .stat.ready strong {
   color: var(--accent);
 }
@@ -446,16 +407,6 @@ onUnmounted(() => clearInterval(pollTimer))
   border: 1px solid color-mix(in srgb, var(--cream) 25%, transparent);
   border-radius: 0.35rem;
   color: var(--cream);
-}
-
-.foot {
-  margin-top: 1.5rem;
-  font-weight: 700;
-  color: var(--cream);
-}
-
-.foot a {
-  color: var(--accent-yellow);
 }
 
 @media (max-width: 700px) {

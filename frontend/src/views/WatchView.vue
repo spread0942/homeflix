@@ -691,11 +691,11 @@ onUnmounted(() => {
       <div v-if="film.playback_status === 'processing'" class="banner">
         Converting to browser-friendly MP4 (H.264). Large films can take a while — this page will
         unlock when ready. Track all jobs in
-        <RouterLink to="/conversions">Conversions</RouterLink>.
+        <RouterLink to="/admin/conversions">Conversions</RouterLink>.
       </div>
       <div v-else-if="film.playback_status === 'failed'" class="banner err">
         Conversion failed. Retry from
-        <RouterLink to="/conversions">Conversions</RouterLink>, or re-upload an H.264 MP4.
+        <RouterLink to="/admin/conversions">Conversions</RouterLink>, or re-upload an H.264 MP4.
       </div>
       <div
         class="player-shell"

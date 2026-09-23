@@ -1,5 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import ConversionsPanel from '../components/ConversionsPanel.vue'
 import {
   createAnimation,
   createSeries,
@@ -10,6 +12,11 @@ import {
   updateAnimation,
   updateSeries,
 } from '../api'
+
+const route = useRoute()
+const section = computed(() =>
+  route.name === 'admin-conversions' ? 'conversions' : 'upload',
+)
 
 const tab = ref('films') // 'films' | 'series'
 
@@ -599,33 +606,38 @@ function rowStatusLabel(row) {
       <p class="eyebrow">Administration</p>
       <h1>Admin</h1>
       <p>
-        Manage series and films in separate tabs. Posters are stored as
-        <strong>WebP</strong>. Track video conversion in
-        <RouterLink class="inline-link" to="/conversions">Conversions</RouterLink>.
+        Upload and manage series or films (posters stored as <strong>WebP</strong>). Check conversion
+        status and retry failed jobs in the Conversions tab.
       </p>
     </header>
 
     <nav class="tabs" aria-label="Admin sections">
-      <button
-        type="button"
-        class="tab"
-        :class="{ active: tab === 'films' }"
-        @click="tab = 'films'"
-      >
-        Films
-      </button>
-      <button
-        type="button"
-        class="tab"
-        :class="{ active: tab === 'series' }"
-        @click="tab = 'series'"
-      >
-        Series
-      </button>
+      <RouterLink class="tab" :to="{ name: 'admin-upload' }">Upload</RouterLink>
+      <RouterLink class="tab" :to="{ name: 'admin-conversions' }">Conversions</RouterLink>
     </nav>
 
-    <p v-if="success" class="banner ok">{{ success }}</p>
-    <p v-if="error" class="banner err">{{ error }}</p>
+    <template v-if="section === 'upload'">
+      <nav class="tabs subtabs" aria-label="Upload sections">
+        <button
+          type="button"
+          class="tab"
+          :class="{ active: tab === 'films' }"
+          @click="tab = 'films'"
+        >
+          Films
+        </button>
+        <button
+          type="button"
+          class="tab"
+          :class="{ active: tab === 'series' }"
+          @click="tab = 'series'"
+        >
+          Series
+        </button>
+      </nav>
+
+      <p v-if="success" class="banner ok">{{ success }}</p>
+      <p v-if="error" class="banner err">{{ error }}</p>
 
     <div v-show="tab === 'films'" class="panel">
       <!-- Edit existing film -->
@@ -1033,6 +1045,9 @@ function rowStatusLabel(row) {
         <div v-else class="state">No series yet.</div>
       </div>
     </div>
+    </template>
+
+    <ConversionsPanel v-else />
   </section>
 </template>
 
@@ -1081,6 +1096,10 @@ function rowStatusLabel(row) {
   margin-bottom: 1.25rem;
 }
 
+.tabs.subtabs {
+  margin-top: -0.35rem;
+}
+
 .tab {
   padding: 0.55rem 1.15rem;
   border: 1px solid color-mix(in srgb, var(--cream) 30%, transparent);
@@ -1088,6 +1107,7 @@ function rowStatusLabel(row) {
   background: transparent;
   color: var(--cream);
   font-weight: 700;
+  text-decoration: none;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
@@ -1096,7 +1116,8 @@ function rowStatusLabel(row) {
   color: var(--accent);
 }
 
-.tab.active {
+.tab.active,
+.tab.router-link-active {
   background: transparent;
   border-color: var(--accent);
   color: var(--accent);
