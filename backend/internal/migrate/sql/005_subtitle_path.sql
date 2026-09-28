@@ -1,0 +1,2 @@
+ALTER TABLE animations
+    ADD COLUMN IF NOT EXISTS subtitle_path TEXT NOT NULL DEFAULT '';

@@ -38,6 +38,9 @@ const episode = ref('')
 const sortOrder = ref('0')
 const videoFile = ref(null)
 const posterFile = ref(null)
+const subtitleFile = ref(null)
+const removeSubtitle = ref(false)
+const editingHasSubtitle = ref(false)
 const filmFormEl = ref(null)
 
 const batchItems = ref([])
@@ -278,6 +281,7 @@ function newBatchRow(file) {
   return {
     key: `batch-${batchSeq}`,
     file,
+    subtitleFile: null,
     name: file.name.replace(/\.[^.]+$/, '') || file.name,
     description: '',
     seriesId: '',
@@ -289,11 +293,23 @@ function newBatchRow(file) {
   }
 }
 
+function fileBaseName(filename) {
+  return (filename || '').replace(/\.[^.]+$/, '').toLowerCase()
+}
+
+function isSubtitleFile(file) {
+  const name = (file?.name || '').toLowerCase()
+  return name.endsWith('.srt') || name.endsWith('.vtt')
+}
+
 function onBatchFiles(e) {
   const files = [...(e.target.files || [])]
   if (!files.length) return
   editingFilmId.value = null
-  const rows = files.map(newBatchRow)
+
+  const videos = files.filter((f) => !isSubtitleFile(f))
+  const subs = files.filter(isSubtitleFile)
+  const rows = videos.map(newBatchRow)
 
   if (batchSeriesId.value) {
     const extras = batchItems.value
@@ -310,9 +326,45 @@ function onBatchFiles(e) {
   }
 
   batchItems.value.push(...rows)
+
+  const pool = [...batchItems.value]
+  let matched = 0
+  for (const sub of subs) {
+    const base = fileBaseName(sub.name)
+    const row = pool.find(
+      (r) =>
+        (r.status === 'pending' || r.status === 'error') &&
+        !r.subtitleFile &&
+        fileBaseName(r.file.name) === base,
+    )
+    if (row) {
+      row.subtitleFile = sub
+      matched += 1
+    }
+  }
+
   if (batchFileInput.value) batchFileInput.value.value = ''
   success.value = ''
   error.value = ''
+  if (!videos.length && subs.length && !matched) {
+    error.value = 'No matching videos for those subtitle files (match by same filename).'
+  } else if (subs.length && matched) {
+    success.value = `Matched ${matched} subtitle file${matched === 1 ? '' : 's'} by name.`
+  }
+}
+
+function onBatchSubtitleChange(row, e) {
+  const file = e.target.files?.[0] || null
+  if (file && !isSubtitleFile(file)) {
+    error.value = 'Subtitle must be .srt or .vtt'
+    e.target.value = ''
+    return
+  }
+  row.subtitleFile = file
+}
+
+function clearBatchSubtitle(row) {
+  row.subtitleFile = null
 }
 
 function removeBatchRow(key) {
@@ -329,6 +381,11 @@ function onPosterChange(e) {
   posterFile.value = e.target.files?.[0] || null
 }
 
+function onSubtitleChange(e) {
+  subtitleFile.value = e.target.files?.[0] || null
+  if (subtitleFile.value) removeSubtitle.value = false
+}
+
 function onSeriesPosterChange(e) {
   seriesPosterFile.value = e.target.files?.[0] || null
 }
@@ -340,6 +397,9 @@ function resetFilmForm(keepSeries = '') {
   seriesId.value = keepSeries
   videoFile.value = null
   posterFile.value = null
+  subtitleFile.value = null
+  removeSubtitle.value = false
+  editingHasSubtitle.value = false
   if (filmFormEl.value) filmFormEl.value.reset()
   seriesId.value = keepSeries
   applySeriesDefaults(keepSeries)
@@ -365,6 +425,9 @@ function startEditFilm(film) {
   sortOrder.value = film.sort_order != null ? String(film.sort_order) : '0'
   videoFile.value = null
   posterFile.value = null
+  subtitleFile.value = null
+  removeSubtitle.value = false
+  editingHasSubtitle.value = Boolean(film.subtitle_url)
   success.value = ''
   error.value = ''
   nextTick(() => {
@@ -434,7 +497,7 @@ async function onCreateSeries(e) {
   }
 }
 
-function buildAnimationForm(fields, { video, poster } = {}) {
+function buildAnimationForm(fields, { video, poster, subtitle, clearSubtitle } = {}) {
   const form = new FormData()
   form.append('name', fields.name.trim())
   form.append('description', (fields.description || '').trim())
@@ -444,6 +507,8 @@ function buildAnimationForm(fields, { video, poster } = {}) {
   form.append('sort_order', fields.sortOrder || '0')
   if (video) form.append('video', video)
   if (poster) form.append('poster', poster)
+  if (subtitle) form.append('subtitle', subtitle)
+  if (clearSubtitle) form.append('remove_subtitle', '1')
   return form
 }
 
@@ -470,7 +535,11 @@ async function onSubmit(e) {
       episode: episode.value,
       sortOrder: sortOrder.value,
     },
-    { poster: posterFile.value },
+    {
+      poster: posterFile.value,
+      subtitle: subtitleFile.value,
+      clearSubtitle: removeSubtitle.value && !subtitleFile.value,
+    },
   )
 
   submitting.value = true
@@ -518,7 +587,7 @@ async function uploadBatch() {
           episode: row.episode,
           sortOrder: row.sortOrder,
         },
-        { video: row.file },
+        { video: row.file, subtitle: row.subtitleFile },
       )
       await createAnimation(form)
       row.status = 'done'
@@ -667,6 +736,23 @@ function rowStatusLabel(row) {
           <input type="file" accept="image/*" @change="onPosterChange" />
           <span class="field-note">Leave empty to keep the current poster</span>
         </label>
+        <label>
+          Subtitles (optional)
+          <input type="file" accept=".srt,.vtt,text/vtt" @change="onSubtitleChange" />
+          <span class="field-note">
+            {{
+              subtitleFile
+                ? `Will upload ${subtitleFile.name}`
+                : editingHasSubtitle
+                  ? 'Current film has subtitles — upload a new file to replace'
+                  : 'Upload an .srt or .vtt file'
+            }}
+          </span>
+        </label>
+        <label v-if="editingHasSubtitle && !subtitleFile" class="check-row">
+          <input v-model="removeSubtitle" type="checkbox" />
+          Remove current subtitles
+        </label>
         <div class="form-actions">
           <button class="submit" type="submit" :disabled="submitting">
             {{ submitting ? 'Saving…' : 'Save changes' }}
@@ -682,17 +768,18 @@ function rowStatusLabel(row) {
         <div class="batch-head">
           <h2>Upload films / episodes</h2>
           <p class="hint">
-            Select several videos, edit titles and series in the table, then upload all.
+            Select videos and optional .srt/.vtt subtitles (same filename matches automatically).
+            Edit titles and series in the table, then upload all.
           </p>
         </div>
 
         <div class="batch-toolbar">
           <label class="file-pick">
-            Add videos
+            Add videos / subtitles
             <input
               ref="batchFileInput"
               type="file"
-              accept="video/*"
+              accept="video/*,.srt,.vtt,text/vtt"
               multiple
               :disabled="batchBusy"
               @change="onBatchFiles"
@@ -790,6 +877,7 @@ function rowStatusLabel(row) {
               <tr>
                 <th scope="col">File</th>
                 <th scope="col">Title</th>
+                <th scope="col">Subtitles</th>
                 <th scope="col">Series</th>
                 <th scope="col">Season</th>
                 <th scope="col">Episode</th>
@@ -816,6 +904,32 @@ function rowStatusLabel(row) {
                     :disabled="row.status === 'uploading' || row.status === 'done'"
                     aria-label="Title"
                   />
+                </td>
+                <td class="sub-cell">
+                  <div class="sub-pick">
+                    <label class="sub-file">
+                      <span class="sub-label">{{
+                        row.subtitleFile ? row.subtitleFile.name : 'Add .srt'
+                      }}</span>
+                      <input
+                        type="file"
+                        accept=".srt,.vtt,text/vtt"
+                        :disabled="row.status === 'uploading' || row.status === 'done'"
+                        :aria-label="`Subtitle for ${row.file.name}`"
+                        @change="onBatchSubtitleChange(row, $event)"
+                      />
+                    </label>
+                    <button
+                      v-if="row.subtitleFile"
+                      type="button"
+                      class="danger icon-btn"
+                      :disabled="row.status === 'uploading' || row.status === 'done'"
+                      :aria-label="`Clear subtitle for ${row.file.name}`"
+                      @click="clearBatchSubtitle(row)"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </td>
                 <td>
                   <select
@@ -914,6 +1028,7 @@ function rowStatusLabel(row) {
                 <span class="status-pill" :class="film.playback_status || 'ready'">{{
                   film.playback_status || 'ready'
                 }}</span>
+                <span v-if="film.subtitle_url" class="status-pill cc" title="Has subtitles">CC</span>
                 {{ filmMeta(film) || film.description || '—' }}
               </p>
             </div>
@@ -1089,6 +1204,26 @@ function rowStatusLabel(row) {
   background: transparent;
   border: 1px solid #8b1e1e;
   color: #fde8e8;
+}
+
+.status-pill.cc {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--cream) 45%, transparent);
+  color: var(--cream);
+  letter-spacing: 0.06em;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--cream) 85%, transparent);
+}
+
+.check-row input[type='checkbox'] {
+  width: auto;
+  margin: 0;
 }
 
 .form,
@@ -1448,6 +1583,49 @@ option {
 
 .file-cell {
   max-width: 11rem;
+}
+
+.sub-cell {
+  max-width: 10rem;
+}
+
+.sub-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.sub-file {
+  position: relative;
+  display: block;
+  min-width: 0;
+  flex: 1;
+  cursor: pointer;
+}
+
+.sub-file input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.sub-label {
+  display: block;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 28%, transparent);
+  border-radius: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--cream) 80%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sub-file:hover .sub-label {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .file-name {

@@ -20,6 +20,7 @@ import (
 	"github.com/spread/homeflix/internal/imageconv"
 	"github.com/spread/homeflix/internal/models"
 	"github.com/spread/homeflix/internal/store"
+	"github.com/spread/homeflix/internal/subtitles"
 	"github.com/spread/homeflix/internal/transcode"
 )
 
@@ -51,6 +52,7 @@ func (a *API) Routes() chi.Router {
 	r.Delete("/animations/{id}", a.DeleteAnimation)
 	r.Post("/animations/{id}/transcode", a.TranscodeAnimation)
 	r.Get("/animations/{id}/poster", a.ServePoster)
+	r.Get("/animations/{id}/subtitle", a.ServeSubtitle)
 	r.Get("/animations/{id}/stream", a.StreamVideo)
 
 	r.Get("/continue-watching", a.ContinueWatching)
@@ -339,6 +341,9 @@ func (a *API) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 	for _, e := range entries {
 		_ = os.Remove(filepath.Join(a.MediaRoot, e.VideoPath))
 		_ = os.Remove(filepath.Join(a.MediaRoot, e.PosterPath))
+		if e.SubtitlePath != "" {
+			_ = os.Remove(filepath.Join(a.MediaRoot, e.SubtitlePath))
+		}
 	}
 	if ser.PosterPath != nil && *ser.PosterPath != "" {
 		_ = os.Remove(filepath.Join(a.MediaRoot, *ser.PosterPath))
@@ -461,6 +466,17 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 		defer posterFile.Close()
 	}
 
+	subtitleFile, subtitleHeader, subtitleErr := r.FormFile("subtitle")
+	hasSubtitle := subtitleErr == nil
+	if hasSubtitle {
+		defer subtitleFile.Close()
+		ext := strings.ToLower(filepath.Ext(subtitleHeader.Filename))
+		if ext != ".srt" && ext != ".vtt" {
+			writeError(w, http.StatusBadRequest, "subtitle must be .srt or .vtt")
+			return
+		}
+	}
+
 	id := uuid.New()
 	videoExt := extOr(videoHeader.Filename, ".mp4")
 	videoRel := filepath.Join("videos", id.String()+videoExt)
@@ -494,6 +510,25 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var subtitleRel string
+	var subtitleAbs string
+	if hasSubtitle {
+		subtitleRel = filepath.Join("subtitles", id.String()+strings.ToLower(filepath.Ext(subtitleHeader.Filename)))
+		subtitleAbs = filepath.Join(a.MediaRoot, subtitleRel)
+		if err := os.MkdirAll(filepath.Dir(subtitleAbs), 0o755); err != nil {
+			_ = os.Remove(videoAbs)
+			_ = os.Remove(posterAbs)
+			writeError(w, http.StatusInternalServerError, "failed to prepare storage")
+			return
+		}
+		if err := saveUpload(subtitleFile, subtitleAbs); err != nil {
+			_ = os.Remove(videoAbs)
+			_ = os.Remove(posterAbs)
+			writeError(w, http.StatusInternalServerError, "failed to save subtitle")
+			return
+		}
+	}
+
 	contentType := videoHeader.Header.Get("Content-Type")
 	if contentType == "" || contentType == "application/octet-stream" {
 		contentType = mimeFromExt(videoExt)
@@ -510,6 +545,7 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 		Description:    description,
 		VideoPath:      videoRel,
 		PosterPath:     posterRel,
+		SubtitlePath:   subtitleRel,
 		ContentType:    contentType,
 		PlaybackStatus: status,
 		SeriesID:       seriesID,
@@ -520,6 +556,9 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 	if err := a.Store.Create(r.Context(), anim); err != nil {
 		_ = os.Remove(videoAbs)
 		_ = os.Remove(posterAbs)
+		if subtitleAbs != "" {
+			_ = os.Remove(subtitleAbs)
+		}
 		writeError(w, http.StatusInternalServerError, "failed to save animation")
 		return
 	}
@@ -621,9 +660,54 @@ func (a *API) UpdateAnimation(w http.ResponseWriter, r *http.Request) {
 		newPosterAbs = abs
 	}
 
+	subtitleRel := existing.SubtitlePath
+	var newSubtitleAbs string
+	var oldSubtitleAbs string
+	if strings.EqualFold(strings.TrimSpace(r.FormValue("remove_subtitle")), "1") ||
+		strings.EqualFold(strings.TrimSpace(r.FormValue("remove_subtitle")), "true") {
+		if existing.SubtitlePath != "" {
+			oldSubtitleAbs = filepath.Join(a.MediaRoot, existing.SubtitlePath)
+		}
+		subtitleRel = ""
+	}
+	subtitleFile, subtitleHeader, err := r.FormFile("subtitle")
+	if err == nil {
+		defer subtitleFile.Close()
+		ext := strings.ToLower(filepath.Ext(subtitleHeader.Filename))
+		if ext != ".srt" && ext != ".vtt" {
+			if newPosterAbs != "" {
+				_ = os.Remove(newPosterAbs)
+			}
+			writeError(w, http.StatusBadRequest, "subtitle must be .srt or .vtt")
+			return
+		}
+		rel := filepath.Join("subtitles", id.String()+ext)
+		abs := filepath.Join(a.MediaRoot, rel)
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			if newPosterAbs != "" {
+				_ = os.Remove(newPosterAbs)
+			}
+			writeError(w, http.StatusInternalServerError, "failed to prepare storage")
+			return
+		}
+		if err := saveUpload(subtitleFile, abs); err != nil {
+			if newPosterAbs != "" {
+				_ = os.Remove(newPosterAbs)
+			}
+			writeError(w, http.StatusInternalServerError, "failed to save subtitle")
+			return
+		}
+		if existing.SubtitlePath != "" && existing.SubtitlePath != rel {
+			oldSubtitleAbs = filepath.Join(a.MediaRoot, existing.SubtitlePath)
+		}
+		subtitleRel = rel
+		newSubtitleAbs = abs
+	}
+
 	existing.Name = name
 	existing.Description = description
 	existing.PosterPath = posterRel
+	existing.SubtitlePath = subtitleRel
 	existing.SeriesID = seriesID
 	existing.Season = season
 	existing.Episode = episode
@@ -632,8 +716,14 @@ func (a *API) UpdateAnimation(w http.ResponseWriter, r *http.Request) {
 		if newPosterAbs != "" {
 			_ = os.Remove(newPosterAbs)
 		}
+		if newSubtitleAbs != "" {
+			_ = os.Remove(newSubtitleAbs)
+		}
 		writeError(w, http.StatusInternalServerError, "failed to update animation")
 		return
+	}
+	if oldSubtitleAbs != "" {
+		_ = os.Remove(oldSubtitleAbs)
 	}
 
 	updated, err := a.Store.Get(r.Context(), id)
@@ -741,6 +831,9 @@ func (a *API) DeleteAnimation(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = os.Remove(filepath.Join(a.MediaRoot, item.VideoPath))
 	_ = os.Remove(filepath.Join(a.MediaRoot, item.PosterPath))
+	if item.SubtitlePath != "" {
+		_ = os.Remove(filepath.Join(a.MediaRoot, item.SubtitlePath))
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -764,6 +857,37 @@ func (a *API) ServePoster(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/webp")
 	}
 	http.ServeFile(w, r, path)
+}
+
+func (a *API) ServeSubtitle(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	item, err := a.Store.Get(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get animation")
+		return
+	}
+	if item.SubtitlePath == "" {
+		writeError(w, http.StatusNotFound, "no subtitle")
+		return
+	}
+	path := filepath.Join(a.MediaRoot, item.SubtitlePath)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "subtitle file missing")
+		return
+	}
+	vtt := subtitles.ToVTT(raw)
+	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write(vtt)
 }
 
 func (a *API) StreamVideo(w http.ResponseWriter, r *http.Request) {

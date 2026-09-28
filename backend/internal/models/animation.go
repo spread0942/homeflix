@@ -32,6 +32,7 @@ type Animation struct {
 	Description          string     `json:"description"`
 	VideoPath            string     `json:"-"`
 	PosterPath           string     `json:"-"`
+	SubtitlePath         string     `json:"-"`
 	ContentType          string     `json:"content_type"`
 	PlaybackStatus       string     `json:"playback_status"`
 	SeriesID             *uuid.UUID `json:"series_id,omitempty"`
@@ -42,6 +43,7 @@ type Animation struct {
 	CreatedAt            time.Time  `json:"created_at"`
 	PosterURL            string     `json:"poster_url"`
 	StreamURL            string     `json:"stream_url"`
+	SubtitleURL          string     `json:"subtitle_url,omitempty"`
 	Viewed               bool       `json:"viewed"` // episode/film finished
 	WatchPositionSeconds float64    `json:"watch_position_seconds,omitempty"`
 	WatchDurationSeconds float64    `json:"watch_duration_seconds,omitempty"`
@@ -51,6 +53,11 @@ func (a *Animation) WithURLs() {
 	id := a.ID.String()
 	a.PosterURL = "/api/animations/" + id + "/poster"
 	a.StreamURL = "/api/animations/" + id + "/stream"
+	if a.SubtitlePath != "" {
+		a.SubtitleURL = "/api/animations/" + id + "/subtitle"
+	} else {
+		a.SubtitleURL = ""
+	}
 }
 
 // LibraryItem is a home-grid card: either a series or a standalone film.

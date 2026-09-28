@@ -23,13 +23,13 @@ func New(pool *pgxpool.Pool) *Store {
 }
 
 const animationSelect = `
-	a.id, a.name, a.description, a.video_path, a.poster_path, a.content_type, a.playback_status,
+	a.id, a.name, a.description, a.video_path, a.poster_path, a.subtitle_path, a.content_type, a.playback_status,
 	a.series_id, COALESCE(s.name, ''), a.season, a.episode, a.sort_order, a.created_at`
 
 func scanAnimation(row pgx.Row) (*models.Animation, error) {
 	var a models.Animation
 	err := row.Scan(
-		&a.ID, &a.Name, &a.Description, &a.VideoPath, &a.PosterPath, &a.ContentType, &a.PlaybackStatus,
+		&a.ID, &a.Name, &a.Description, &a.VideoPath, &a.PosterPath, &a.SubtitlePath, &a.ContentType, &a.PlaybackStatus,
 		&a.SeriesID, &a.SeriesName, &a.Season, &a.Episode, &a.SortOrder, &a.CreatedAt,
 	)
 	if err != nil {
@@ -44,7 +44,7 @@ func scanAnimationRows(rows pgx.Rows) ([]models.Animation, error) {
 	for rows.Next() {
 		var a models.Animation
 		if err := rows.Scan(
-			&a.ID, &a.Name, &a.Description, &a.VideoPath, &a.PosterPath, &a.ContentType, &a.PlaybackStatus,
+			&a.ID, &a.Name, &a.Description, &a.VideoPath, &a.PosterPath, &a.SubtitlePath, &a.ContentType, &a.PlaybackStatus,
 			&a.SeriesID, &a.SeriesName, &a.Season, &a.Episode, &a.SortOrder, &a.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -126,11 +126,11 @@ func (s *Store) Create(ctx context.Context, a *models.Animation) error {
 	}
 	return s.pool.QueryRow(ctx, `
 		INSERT INTO animations (
-			id, name, description, video_path, poster_path, content_type, playback_status,
+			id, name, description, video_path, poster_path, subtitle_path, content_type, playback_status,
 			series_id, season, episode, sort_order
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING created_at`,
-		a.ID, a.Name, a.Description, a.VideoPath, a.PosterPath, a.ContentType, a.PlaybackStatus,
+		a.ID, a.Name, a.Description, a.VideoPath, a.PosterPath, a.SubtitlePath, a.ContentType, a.PlaybackStatus,
 		a.SeriesID, a.Season, a.Episode, a.SortOrder,
 	).Scan(&a.CreatedAt)
 }
@@ -138,10 +138,10 @@ func (s *Store) Create(ctx context.Context, a *models.Animation) error {
 func (s *Store) Update(ctx context.Context, a *models.Animation) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE animations
-		SET name = $2, description = $3, poster_path = $4,
-			series_id = $5, season = $6, episode = $7, sort_order = $8
+		SET name = $2, description = $3, poster_path = $4, subtitle_path = $5,
+			series_id = $6, season = $7, episode = $8, sort_order = $9
 		WHERE id = $1`,
-		a.ID, a.Name, a.Description, a.PosterPath,
+		a.ID, a.Name, a.Description, a.PosterPath, a.SubtitlePath,
 		a.SeriesID, a.Season, a.Episode, a.SortOrder,
 	)
 	if err != nil {
