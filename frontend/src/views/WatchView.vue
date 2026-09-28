@@ -32,6 +32,7 @@ const duration = ref(0)
 const resumePosition = ref(0)
 const progressHint = ref(null) // { position_seconds, duration_seconds, completed }
 const subtitlesOn = ref(true)
+const selectedSubtitleId = ref('')
 const isPlayStation = /PlayStation/i.test(
   typeof navigator !== 'undefined' ? navigator.userAgent : '',
 )
@@ -53,7 +54,14 @@ const PROGRESS_SAVE_MS = 10000
 const RESUME_MIN_SECONDS = 5
 
 const playLabel = computed(() => (playing.value ? 'Pause' : 'Play'))
-const hasSubtitles = computed(() => Boolean(film.value?.subtitle_url))
+const subtitleTracks = computed(() => film.value?.subtitles || [])
+const hasSubtitles = computed(() => subtitleTracks.value.length > 0)
+const activeSubtitle = computed(
+  () =>
+    subtitleTracks.value.find((t) => t.id === selectedSubtitleId.value) ||
+    subtitleTracks.value[0] ||
+    null,
+)
 const progressPercent = computed(() => {
   if (!duration.value) return 0
   return Math.min(100, Math.max(0, (currentTime.value / duration.value) * 100))
@@ -175,6 +183,7 @@ async function load() {
   resumePosition.value = 0
   progressHint.value = null
   subtitlesOn.value = true
+  selectedSubtitleId.value = ''
   resumeApplied = false
   lastProgressSave = 0
   lastGoodPosition = 0
@@ -185,6 +194,7 @@ async function load() {
   try {
     film.value = await getAnimation(props.id)
     progressFilmId = film.value.id
+    selectedSubtitleId.value = film.value.subtitles?.[0]?.id || ''
     if (film.value.series_id) {
       try {
         series.value = await getSeries(film.value.series_id)
@@ -625,14 +635,54 @@ async function toggleFullscreen() {
 function applySubtitleMode() {
   const tracks = videoEl.value?.textTracks
   if (!tracks?.length) return
+  const activeId = activeSubtitle.value?.id
   for (let i = 0; i < tracks.length; i++) {
-    tracks[i].mode = i === 0 && subtitlesOn.value ? 'showing' : 'hidden'
+    const trackMeta = subtitleTracks.value[i]
+    const isActive = subtitlesOn.value && trackMeta && trackMeta.id === activeId
+    tracks[i].mode = isActive ? 'showing' : 'hidden'
   }
 }
 
 function toggleSubtitles() {
   if (!hasSubtitles.value) return
   subtitlesOn.value = !subtitlesOn.value
+  applySubtitleMode()
+  showOverlay()
+}
+
+function selectSubtitle(id) {
+  if (!id) {
+    subtitlesOn.value = false
+    applySubtitleMode()
+    return
+  }
+  selectedSubtitleId.value = id
+  subtitlesOn.value = true
+  applySubtitleMode()
+  showOverlay()
+}
+
+function cycleSubtitleLanguage() {
+  if (!subtitleTracks.value.length) return
+  if (!subtitlesOn.value) {
+    subtitlesOn.value = true
+    if (!selectedSubtitleId.value) {
+      selectedSubtitleId.value = subtitleTracks.value[0].id
+    }
+    applySubtitleMode()
+    showOverlay()
+    return
+  }
+  const ids = subtitleTracks.value.map((t) => t.id)
+  const idx = ids.indexOf(selectedSubtitleId.value)
+  if (idx < 0 || idx === ids.length - 1) {
+    // after last language → off
+    subtitlesOn.value = false
+    applySubtitleMode()
+    showOverlay()
+    return
+  }
+  selectedSubtitleId.value = ids[idx + 1]
   applySubtitleMode()
   showOverlay()
 }
@@ -678,7 +728,7 @@ function onKeydown(e) {
     case 'C':
       if (!hasSubtitles.value) break
       e.preventDefault()
-      toggleSubtitles()
+      cycleSubtitleLanguage()
       break
     case 'f':
     case 'F':
@@ -756,7 +806,11 @@ onUnmounted(() => {
           <div class="video-frame">
             <video
               ref="videoEl"
-              :key="film.stream_url + film.playback_status + (film.subtitle_url || '')"
+              :key="
+                film.stream_url +
+                film.playback_status +
+                (film.subtitles || []).map((t) => t.id).join(',')
+              "
               controls
               playsinline
               preload="metadata"
@@ -772,27 +826,42 @@ onUnmounted(() => {
               @error="onVideoError"
             >
               <track
-                v-if="film.subtitle_url"
+                v-for="(track, index) in subtitleTracks"
+                :key="track.id"
                 kind="subtitles"
-                srclang="und"
-                label="Subtitles"
-                :src="film.subtitle_url"
-                default
+                :srclang="track.language || 'und'"
+                :label="track.label || track.language || 'Subtitles'"
+                :src="track.url"
+                :default="index === 0"
               />
               Your browser does not support HTML5 video.
             </video>
 
-            <button
-              v-if="hasSubtitles && !isPlayStation"
-              type="button"
-              class="cc-btn"
-              :class="{ on: subtitlesOn }"
-              :aria-pressed="subtitlesOn"
-              :aria-label="subtitlesOn ? 'Hide subtitles' : 'Show subtitles'"
-              @click.stop="toggleSubtitles"
-            >
-              CC
-            </button>
+            <div v-if="hasSubtitles && !isPlayStation" class="cc-controls">
+              <button
+                type="button"
+                class="cc-btn"
+                :class="{ on: subtitlesOn }"
+                :aria-pressed="subtitlesOn"
+                :aria-label="subtitlesOn ? 'Hide subtitles' : 'Show subtitles'"
+                @click.stop="toggleSubtitles"
+              >
+                CC
+              </button>
+              <select
+                v-if="subtitleTracks.length > 1"
+                class="cc-lang"
+                :value="selectedSubtitleId"
+                :disabled="!subtitlesOn"
+                aria-label="Subtitle language"
+                @change="selectSubtitle($event.target.value)"
+                @click.stop
+              >
+                <option v-for="track in subtitleTracks" :key="track.id" :value="track.id">
+                  {{ track.label || track.language }}
+                </option>
+              </select>
+            </div>
 
             <div class="seek-flash" :class="{ show: seekFlash === 'back', back: true }" aria-hidden="true">
               −{{ SEEK_SECONDS }}s
@@ -964,10 +1033,18 @@ onUnmounted(() => {
                 class="film-btn mark"
                 :class="{ active: subtitlesOn }"
                 :aria-pressed="subtitlesOn"
-                :aria-label="subtitlesOn ? 'Hide subtitles' : 'Show subtitles'"
-                @click="toggleSubtitles"
+                :aria-label="
+                  subtitlesOn
+                    ? `Subtitles: ${activeSubtitle?.label || 'on'}. Press to cycle`
+                    : 'Show subtitles'
+                "
+                @click="cycleSubtitleLanguage"
               >
-                CC
+                {{
+                  subtitlesOn
+                    ? `CC ${activeSubtitle?.language || ''}`.trim()
+                    : 'CC'
+                }}
               </button>
             </div>
           </div>
@@ -1143,11 +1220,17 @@ onUnmounted(() => {
   border-radius: 0.3rem 0.3rem 0 0;
 }
 
-.cc-btn {
+.cc-controls {
   position: absolute;
   right: 0.75rem;
   bottom: 3.1rem;
   z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cc-btn {
   min-width: 2.4rem;
   padding: 0.35rem 0.55rem;
   border: 1px solid color-mix(in srgb, var(--cream) 55%, transparent);
@@ -1168,6 +1251,22 @@ onUnmounted(() => {
 
 .cc-btn:hover {
   border-color: var(--accent);
+}
+
+.cc-lang {
+  max-width: 8.5rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 55%, transparent);
+  border-radius: 0.3rem;
+  background: color-mix(in srgb, #000 55%, transparent);
+  color: var(--cream);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.cc-lang:disabled {
+  opacity: 0.45;
 }
 
 video,

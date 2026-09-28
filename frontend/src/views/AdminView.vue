@@ -6,7 +6,9 @@ import {
   createAnimation,
   createSeries,
   deleteAnimation,
+  deleteAnimationSubtitle,
   deleteSeries,
+  addAnimationSubtitles,
   listAnimations,
   listSeries,
   updateAnimation,
@@ -38,9 +40,9 @@ const episode = ref('')
 const sortOrder = ref('0')
 const videoFile = ref(null)
 const posterFile = ref(null)
-const subtitleFile = ref(null)
-const removeSubtitle = ref(false)
-const editingHasSubtitle = ref(false)
+const editingSubtitles = ref([])
+const addSubtitleFile = ref(null)
+const addSubtitleLang = ref('it')
 const filmFormEl = ref(null)
 
 const batchItems = ref([])
@@ -281,7 +283,7 @@ function newBatchRow(file) {
   return {
     key: `batch-${batchSeq}`,
     file,
-    subtitleFile: null,
+    subtitleFiles: [], // { file, lang, label }
     name: file.name.replace(/\.[^.]+$/, '') || file.name,
     description: '',
     seriesId: '',
@@ -300,6 +302,62 @@ function fileBaseName(filename) {
 function isSubtitleFile(file) {
   const name = (file?.name || '').toLowerCase()
   return name.endsWith('.srt') || name.endsWith('.vtt')
+}
+
+const LANG_TAGS = {
+  en: { code: 'en', label: 'English' },
+  eng: { code: 'en', label: 'English' },
+  english: { code: 'en', label: 'English' },
+  it: { code: 'it', label: 'Italian' },
+  ita: { code: 'it', label: 'Italian' },
+  italian: { code: 'it', label: 'Italian' },
+  es: { code: 'es', label: 'Spanish' },
+  spa: { code: 'es', label: 'Spanish' },
+  fr: { code: 'fr', label: 'French' },
+  fre: { code: 'fr', label: 'French' },
+  fra: { code: 'fr', label: 'French' },
+  de: { code: 'de', label: 'German' },
+  ger: { code: 'de', label: 'German' },
+  deu: { code: 'de', label: 'German' },
+  pt: { code: 'pt', label: 'Portuguese' },
+  ja: { code: 'ja', label: 'Japanese' },
+  jpn: { code: 'ja', label: 'Japanese' },
+  zh: { code: 'zh', label: 'Chinese' },
+  ko: { code: 'ko', label: 'Korean' },
+  kor: { code: 'ko', label: 'Korean' },
+  ru: { code: 'ru', label: 'Russian' },
+  rus: { code: 'ru', label: 'Russian' },
+}
+
+const SUBTITLE_LANG_OPTIONS = [
+  { code: 'it', label: 'Italian' },
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Spanish' },
+  { code: 'fr', label: 'French' },
+  { code: 'de', label: 'German' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'ja', label: 'Japanese' },
+  { code: 'zh', label: 'Chinese' },
+  { code: 'ko', label: 'Korean' },
+  { code: 'ru', label: 'Russian' },
+  { code: 'und', label: 'Other / unknown' },
+]
+
+function parseSubtitleFilename(filename) {
+  const stem = fileBaseName(filename)
+  const dot = stem.lastIndexOf('.')
+  if (dot > 0) {
+    const tag = stem.slice(dot + 1)
+    const info = LANG_TAGS[tag]
+    if (info) return { base: stem.slice(0, dot), lang: info.code, label: info.label }
+  }
+  const under = stem.lastIndexOf('_')
+  if (under > 0) {
+    const tag = stem.slice(under + 1)
+    const info = LANG_TAGS[tag]
+    if (info) return { base: stem.slice(0, under), lang: info.code, label: info.label }
+  }
+  return { base: stem, lang: 'und', label: 'Subtitles' }
 }
 
 function onBatchFiles(e) {
@@ -330,15 +388,17 @@ function onBatchFiles(e) {
   const pool = [...batchItems.value]
   let matched = 0
   for (const sub of subs) {
-    const base = fileBaseName(sub.name)
+    const parsed = parseSubtitleFilename(sub.name)
     const row = pool.find(
       (r) =>
         (r.status === 'pending' || r.status === 'error') &&
-        !r.subtitleFile &&
-        fileBaseName(r.file.name) === base,
+        fileBaseName(r.file.name) === parsed.base,
     )
     if (row) {
-      row.subtitleFile = sub
+      const existingIdx = row.subtitleFiles.findIndex((s) => s.lang === parsed.lang)
+      const entry = { file: sub, lang: parsed.lang, label: parsed.label }
+      if (existingIdx >= 0) row.subtitleFiles[existingIdx] = entry
+      else row.subtitleFiles.push(entry)
       matched += 1
     }
   }
@@ -347,7 +407,8 @@ function onBatchFiles(e) {
   success.value = ''
   error.value = ''
   if (!videos.length && subs.length && !matched) {
-    error.value = 'No matching videos for those subtitle files (match by same filename).'
+    error.value =
+      'No matching videos for those subtitle files (use Movie.it.srt / Movie.en.srt).'
   } else if (subs.length && matched) {
     success.value = `Matched ${matched} subtitle file${matched === 1 ? '' : 's'} by name.`
   }
@@ -355,16 +416,29 @@ function onBatchFiles(e) {
 
 function onBatchSubtitleChange(row, e) {
   const file = e.target.files?.[0] || null
-  if (file && !isSubtitleFile(file)) {
+  e.target.value = ''
+  if (!file) return
+  if (!isSubtitleFile(file)) {
     error.value = 'Subtitle must be .srt or .vtt'
-    e.target.value = ''
     return
   }
-  row.subtitleFile = file
+  const parsed = parseSubtitleFilename(file.name)
+  const existingIdx = row.subtitleFiles.findIndex((s) => s.lang === parsed.lang)
+  const entry = { file, lang: parsed.lang, label: parsed.label }
+  if (existingIdx >= 0) row.subtitleFiles[existingIdx] = entry
+  else row.subtitleFiles.push(entry)
 }
 
-function clearBatchSubtitle(row) {
-  row.subtitleFile = null
+function clearBatchSubtitle(row, lang) {
+  row.subtitleFiles = row.subtitleFiles.filter((s) => s.lang !== lang)
+}
+
+function setBatchSubtitleLang(row, oldLang, newLang) {
+  const entry = row.subtitleFiles.find((s) => s.lang === oldLang)
+  if (!entry) return
+  const info = SUBTITLE_LANG_OPTIONS.find((o) => o.code === newLang)
+  entry.lang = newLang
+  entry.label = info?.label || newLang.toUpperCase()
 }
 
 function removeBatchRow(key) {
@@ -381,9 +455,12 @@ function onPosterChange(e) {
   posterFile.value = e.target.files?.[0] || null
 }
 
-function onSubtitleChange(e) {
-  subtitleFile.value = e.target.files?.[0] || null
-  if (subtitleFile.value) removeSubtitle.value = false
+function onAddSubtitleFileChange(e) {
+  addSubtitleFile.value = e.target.files?.[0] || null
+  if (addSubtitleFile.value) {
+    const parsed = parseSubtitleFilename(addSubtitleFile.value.name)
+    if (parsed.lang !== 'und') addSubtitleLang.value = parsed.lang
+  }
 }
 
 function onSeriesPosterChange(e) {
@@ -397,9 +474,9 @@ function resetFilmForm(keepSeries = '') {
   seriesId.value = keepSeries
   videoFile.value = null
   posterFile.value = null
-  subtitleFile.value = null
-  removeSubtitle.value = false
-  editingHasSubtitle.value = false
+  editingSubtitles.value = []
+  addSubtitleFile.value = null
+  addSubtitleLang.value = 'it'
   if (filmFormEl.value) filmFormEl.value.reset()
   seriesId.value = keepSeries
   applySeriesDefaults(keepSeries)
@@ -425,9 +502,9 @@ function startEditFilm(film) {
   sortOrder.value = film.sort_order != null ? String(film.sort_order) : '0'
   videoFile.value = null
   posterFile.value = null
-  subtitleFile.value = null
-  removeSubtitle.value = false
-  editingHasSubtitle.value = Boolean(film.subtitle_url)
+  editingSubtitles.value = [...(film.subtitles || [])]
+  addSubtitleFile.value = null
+  addSubtitleLang.value = 'it'
   success.value = ''
   error.value = ''
   nextTick(() => {
@@ -497,7 +574,7 @@ async function onCreateSeries(e) {
   }
 }
 
-function buildAnimationForm(fields, { video, poster, subtitle, clearSubtitle } = {}) {
+function buildAnimationForm(fields, { video, poster, subtitles } = {}) {
   const form = new FormData()
   form.append('name', fields.name.trim())
   form.append('description', (fields.description || '').trim())
@@ -507,8 +584,10 @@ function buildAnimationForm(fields, { video, poster, subtitle, clearSubtitle } =
   form.append('sort_order', fields.sortOrder || '0')
   if (video) form.append('video', video)
   if (poster) form.append('poster', poster)
-  if (subtitle) form.append('subtitle', subtitle)
-  if (clearSubtitle) form.append('remove_subtitle', '1')
+  for (const sub of subtitles || []) {
+    form.append('subtitle', sub.file)
+    form.append('subtitle_lang', sub.lang || 'und')
+  }
   return form
 }
 
@@ -535,16 +614,18 @@ async function onSubmit(e) {
       episode: episode.value,
       sortOrder: sortOrder.value,
     },
-    {
-      poster: posterFile.value,
-      subtitle: subtitleFile.value,
-      clearSubtitle: removeSubtitle.value && !subtitleFile.value,
-    },
+    { poster: posterFile.value },
   )
 
   submitting.value = true
   try {
     await updateAnimation(editingFilmId.value, form)
+    if (addSubtitleFile.value) {
+      const subForm = new FormData()
+      subForm.append('subtitle', addSubtitleFile.value)
+      subForm.append('subtitle_lang', addSubtitleLang.value || 'und')
+      await addAnimationSubtitles(editingFilmId.value, subForm)
+    }
     success.value = `"${name.value.trim()}" updated.`
     const keepSeries = seriesId.value
     resetFilmForm(keepSeries)
@@ -554,6 +635,20 @@ async function onSubmit(e) {
     error.value = err.message
   } finally {
     submitting.value = false
+  }
+}
+
+async function removeEditingSubtitle(track) {
+  if (!editingFilmId.value || !track?.id) return
+  if (!confirm(`Remove ${track.label || track.language} subtitles?`)) return
+  error.value = ''
+  try {
+    await deleteAnimationSubtitle(editingFilmId.value, track.id)
+    editingSubtitles.value = editingSubtitles.value.filter((t) => t.id !== track.id)
+    success.value = `Removed ${track.label || track.language} subtitles.`
+    await refresh()
+  } catch (err) {
+    error.value = err.message
   }
 }
 
@@ -587,7 +682,7 @@ async function uploadBatch() {
           episode: row.episode,
           sortOrder: row.sortOrder,
         },
-        { video: row.file, subtitle: row.subtitleFile },
+        { video: row.file, subtitles: row.subtitleFiles },
       )
       await createAnimation(form)
       row.status = 'done'
@@ -736,23 +831,41 @@ function rowStatusLabel(row) {
           <input type="file" accept="image/*" @change="onPosterChange" />
           <span class="field-note">Leave empty to keep the current poster</span>
         </label>
-        <label>
-          Subtitles (optional)
-          <input type="file" accept=".srt,.vtt,text/vtt" @change="onSubtitleChange" />
-          <span class="field-note">
-            {{
-              subtitleFile
-                ? `Will upload ${subtitleFile.name}`
-                : editingHasSubtitle
-                  ? 'Current film has subtitles — upload a new file to replace'
-                  : 'Upload an .srt or .vtt file'
-            }}
-          </span>
-        </label>
-        <label v-if="editingHasSubtitle && !subtitleFile" class="check-row">
-          <input v-model="removeSubtitle" type="checkbox" />
-          Remove current subtitles
-        </label>
+
+        <div class="sub-edit">
+          <h3 class="sub-edit-title">Subtitles</h3>
+          <ul v-if="editingSubtitles.length" class="sub-track-list">
+            <li v-for="track in editingSubtitles" :key="track.id">
+              <span class="sub-track-label">{{ track.label || track.language }}</span>
+              <span class="sub-track-code">{{ track.language }}</span>
+              <button
+                type="button"
+                class="danger icon-btn"
+                :aria-label="`Remove ${track.label || track.language}`"
+                @click="removeEditingSubtitle(track)"
+              >
+                ✕
+              </button>
+            </li>
+          </ul>
+          <p v-else class="field-note">No subtitle tracks yet.</p>
+          <div class="sub-add-row">
+            <label>
+              Language
+              <select v-model="addSubtitleLang">
+                <option v-for="opt in SUBTITLE_LANG_OPTIONS" :key="opt.code" :value="opt.code">
+                  {{ opt.label }}
+                </option>
+              </select>
+            </label>
+            <label>
+              Add .srt / .vtt
+              <input type="file" accept=".srt,.vtt,text/vtt" @change="onAddSubtitleFileChange" />
+            </label>
+          </div>
+          <span v-if="addSubtitleFile" class="field-note">Will upload {{ addSubtitleFile.name }}</span>
+        </div>
+
         <div class="form-actions">
           <button class="submit" type="submit" :disabled="submitting">
             {{ submitting ? 'Saving…' : 'Save changes' }}
@@ -768,8 +881,8 @@ function rowStatusLabel(row) {
         <div class="batch-head">
           <h2>Upload films / episodes</h2>
           <p class="hint">
-            Select videos and optional .srt/.vtt subtitles (same filename matches automatically).
-            Edit titles and series in the table, then upload all.
+            Select videos and optional .srt/.vtt files. Name them like
+            <code>Movie.it.srt</code> and <code>Movie.en.srt</code> to attach multiple languages.
           </p>
         </div>
 
@@ -906,29 +1019,47 @@ function rowStatusLabel(row) {
                   />
                 </td>
                 <td class="sub-cell">
-                  <div class="sub-pick">
+                  <div class="sub-multi">
+                    <div
+                      v-for="sub in row.subtitleFiles"
+                      :key="sub.lang + sub.file.name"
+                      class="sub-chip"
+                    >
+                      <select
+                        :value="sub.lang"
+                        :disabled="row.status === 'uploading' || row.status === 'done'"
+                        :aria-label="`Language for ${sub.file.name}`"
+                        @change="setBatchSubtitleLang(row, sub.lang, $event.target.value)"
+                      >
+                        <option
+                          v-for="opt in SUBTITLE_LANG_OPTIONS"
+                          :key="opt.code"
+                          :value="opt.code"
+                        >
+                          {{ opt.label }}
+                        </option>
+                      </select>
+                      <span class="sub-chip-name" :title="sub.file.name">{{ sub.file.name }}</span>
+                      <button
+                        type="button"
+                        class="danger icon-btn"
+                        :disabled="row.status === 'uploading' || row.status === 'done'"
+                        :aria-label="`Clear ${sub.label} subtitle`"
+                        @click="clearBatchSubtitle(row, sub.lang)"
+                      >
+                        ✕
+                      </button>
+                    </div>
                     <label class="sub-file">
-                      <span class="sub-label">{{
-                        row.subtitleFile ? row.subtitleFile.name : 'Add .srt'
-                      }}</span>
+                      <span class="sub-label">Add .srt</span>
                       <input
                         type="file"
                         accept=".srt,.vtt,text/vtt"
                         :disabled="row.status === 'uploading' || row.status === 'done'"
-                        :aria-label="`Subtitle for ${row.file.name}`"
+                        :aria-label="`Add subtitle for ${row.file.name}`"
                         @change="onBatchSubtitleChange(row, $event)"
                       />
                     </label>
-                    <button
-                      v-if="row.subtitleFile"
-                      type="button"
-                      class="danger icon-btn"
-                      :disabled="row.status === 'uploading' || row.status === 'done'"
-                      :aria-label="`Clear subtitle for ${row.file.name}`"
-                      @click="clearBatchSubtitle(row)"
-                    >
-                      ✕
-                    </button>
                   </div>
                 </td>
                 <td>
@@ -1028,7 +1159,13 @@ function rowStatusLabel(row) {
                 <span class="status-pill" :class="film.playback_status || 'ready'">{{
                   film.playback_status || 'ready'
                 }}</span>
-                <span v-if="film.subtitle_url" class="status-pill cc" title="Has subtitles">CC</span>
+                <span
+                  v-if="film.subtitles?.length"
+                  class="status-pill cc"
+                  :title="film.subtitles.map((t) => t.label || t.language).join(', ')"
+                >
+                  CC{{ film.subtitles.length > 1 ? `×${film.subtitles.length}` : '' }}
+                </span>
                 {{ filmMeta(film) || film.description || '—' }}
               </p>
             </div>
@@ -1586,7 +1723,34 @@ option {
 }
 
 .sub-cell {
-  max-width: 10rem;
+  max-width: 14rem;
+  min-width: 10rem;
+}
+
+.sub-multi {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.sub-chip {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr auto;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.sub-chip select {
+  padding: 0.3rem 0.35rem;
+  font-size: 0.75rem;
+}
+
+.sub-chip-name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--cream) 70%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sub-pick {
@@ -1599,7 +1763,6 @@ option {
   position: relative;
   display: block;
   min-width: 0;
-  flex: 1;
   cursor: pointer;
 }
 
@@ -1621,11 +1784,68 @@ option {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: center;
 }
 
 .sub-file:hover .sub-label {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.sub-edit {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 22%, transparent);
+  border-radius: 0.35rem;
+}
+
+.sub-edit-title {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--cream);
+}
+
+.sub-track-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.sub-track-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 20%, transparent);
+  border-radius: 0.3rem;
+}
+
+.sub-track-label {
+  font-weight: 700;
+  color: var(--cream);
+}
+
+.sub-track-code {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.sub-add-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .sub-add-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .file-name {

@@ -23,13 +23,13 @@ func New(pool *pgxpool.Pool) *Store {
 }
 
 const animationSelect = `
-	a.id, a.name, a.description, a.video_path, a.poster_path, a.subtitle_path, a.content_type, a.playback_status,
+	a.id, a.name, a.description, a.video_path, a.poster_path, a.content_type, a.playback_status,
 	a.series_id, COALESCE(s.name, ''), a.season, a.episode, a.sort_order, a.created_at`
 
 func scanAnimation(row pgx.Row) (*models.Animation, error) {
 	var a models.Animation
 	err := row.Scan(
-		&a.ID, &a.Name, &a.Description, &a.VideoPath, &a.PosterPath, &a.SubtitlePath, &a.ContentType, &a.PlaybackStatus,
+		&a.ID, &a.Name, &a.Description, &a.VideoPath, &a.PosterPath, &a.ContentType, &a.PlaybackStatus,
 		&a.SeriesID, &a.SeriesName, &a.Season, &a.Episode, &a.SortOrder, &a.CreatedAt,
 	)
 	if err != nil {
@@ -44,7 +44,7 @@ func scanAnimationRows(rows pgx.Rows) ([]models.Animation, error) {
 	for rows.Next() {
 		var a models.Animation
 		if err := rows.Scan(
-			&a.ID, &a.Name, &a.Description, &a.VideoPath, &a.PosterPath, &a.SubtitlePath, &a.ContentType, &a.PlaybackStatus,
+			&a.ID, &a.Name, &a.Description, &a.VideoPath, &a.PosterPath, &a.ContentType, &a.PlaybackStatus,
 			&a.SeriesID, &a.SeriesName, &a.Season, &a.Episode, &a.SortOrder, &a.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -82,7 +82,14 @@ func (s *Store) List(ctx context.Context, q string) ([]models.Animation, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	return scanAnimationRows(rows)
+	out, err := scanAnimationRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.attachSubtitles(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (s *Store) ListStandalone(ctx context.Context, q string) ([]models.Animation, error) {
@@ -108,7 +115,14 @@ func (s *Store) ListStandalone(ctx context.Context, q string) ([]models.Animatio
 		return nil, err
 	}
 	defer rows.Close()
-	return scanAnimationRows(rows)
+	out, err := scanAnimationRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.attachSubtitles(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (s *Store) Get(ctx context.Context, id uuid.UUID) (*models.Animation, error) {
@@ -117,20 +131,33 @@ func (s *Store) Get(ctx context.Context, id uuid.UUID) (*models.Animation, error
 		FROM animations a
 		LEFT JOIN series s ON s.id = a.series_id
 		WHERE a.id = $1`, id)
-	return scanAnimation(row)
+	a, err := scanAnimation(row)
+	if err != nil {
+		return nil, err
+	}
+	tracks, err := s.ListSubtitles(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	a.Subtitles = tracks
+	a.WithURLs()
+	return a, nil
 }
 
 func (s *Store) Create(ctx context.Context, a *models.Animation) error {
 	if a.PlaybackStatus == "" {
 		a.PlaybackStatus = "ready"
 	}
+	if a.Subtitles == nil {
+		a.Subtitles = []models.SubtitleTrack{}
+	}
 	return s.pool.QueryRow(ctx, `
 		INSERT INTO animations (
-			id, name, description, video_path, poster_path, subtitle_path, content_type, playback_status,
+			id, name, description, video_path, poster_path, content_type, playback_status,
 			series_id, season, episode, sort_order
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING created_at`,
-		a.ID, a.Name, a.Description, a.VideoPath, a.PosterPath, a.SubtitlePath, a.ContentType, a.PlaybackStatus,
+		a.ID, a.Name, a.Description, a.VideoPath, a.PosterPath, a.ContentType, a.PlaybackStatus,
 		a.SeriesID, a.Season, a.Episode, a.SortOrder,
 	).Scan(&a.CreatedAt)
 }
@@ -138,10 +165,10 @@ func (s *Store) Create(ctx context.Context, a *models.Animation) error {
 func (s *Store) Update(ctx context.Context, a *models.Animation) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE animations
-		SET name = $2, description = $3, poster_path = $4, subtitle_path = $5,
-			series_id = $6, season = $7, episode = $8, sort_order = $9
+		SET name = $2, description = $3, poster_path = $4,
+			series_id = $5, season = $6, episode = $7, sort_order = $8
 		WHERE id = $1`,
-		a.ID, a.Name, a.Description, a.PosterPath, a.SubtitlePath,
+		a.ID, a.Name, a.Description, a.PosterPath,
 		a.SeriesID, a.Season, a.Episode, a.SortOrder,
 	)
 	if err != nil {
@@ -214,6 +241,139 @@ func (s *Store) Delete(ctx context.Context, id uuid.UUID) (*models.Animation, er
 	return a, nil
 }
 
+func (s *Store) ListSubtitles(ctx context.Context, animationID uuid.UUID) ([]models.SubtitleTrack, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, animation_id, language, label, file_path, created_at
+		FROM animation_subtitles
+		WHERE animation_id = $1
+		ORDER BY language, created_at`, animationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.SubtitleTrack
+	for rows.Next() {
+		var t models.SubtitleTrack
+		if err := rows.Scan(&t.ID, &t.AnimationID, &t.Language, &t.Label, &t.FilePath, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		t.WithURL()
+		out = append(out, t)
+	}
+	if out == nil {
+		out = []models.SubtitleTrack{}
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) GetSubtitle(ctx context.Context, animationID, subtitleID uuid.UUID) (*models.SubtitleTrack, error) {
+	var t models.SubtitleTrack
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, animation_id, language, label, file_path, created_at
+		FROM animation_subtitles
+		WHERE id = $1 AND animation_id = $2`, subtitleID, animationID).Scan(
+		&t.ID, &t.AnimationID, &t.Language, &t.Label, &t.FilePath, &t.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	t.WithURL()
+	return &t, nil
+}
+
+// UpsertSubtitle inserts a track or replaces an existing one for the same language.
+// oldPath is the previous file path when replacing (caller should delete it if different).
+func (s *Store) UpsertSubtitle(ctx context.Context, t *models.SubtitleTrack) (oldPath string, err error) {
+	var existingID uuid.UUID
+	var existingPath string
+	err = s.pool.QueryRow(ctx, `
+		SELECT id, file_path FROM animation_subtitles
+		WHERE animation_id = $1 AND language = $2`, t.AnimationID, t.Language,
+	).Scan(&existingID, &existingPath)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		if t.ID == uuid.Nil {
+			t.ID = uuid.New()
+		}
+		err = s.pool.QueryRow(ctx, `
+			INSERT INTO animation_subtitles (id, animation_id, language, label, file_path)
+			VALUES ($1, $2, $3, $4, $5)
+			RETURNING created_at`,
+			t.ID, t.AnimationID, t.Language, t.Label, t.FilePath,
+		).Scan(&t.CreatedAt)
+		if err != nil {
+			return "", err
+		}
+		t.WithURL()
+		return "", nil
+	}
+	t.ID = existingID
+	oldPath = existingPath
+	_, err = s.pool.Exec(ctx, `
+		UPDATE animation_subtitles
+		SET label = $2, file_path = $3
+		WHERE id = $1`, t.ID, t.Label, t.FilePath)
+	if err != nil {
+		return "", err
+	}
+	_ = s.pool.QueryRow(ctx, `SELECT created_at FROM animation_subtitles WHERE id = $1`, t.ID).Scan(&t.CreatedAt)
+	t.WithURL()
+	return oldPath, nil
+}
+
+func (s *Store) DeleteSubtitle(ctx context.Context, animationID, subtitleID uuid.UUID) (*models.SubtitleTrack, error) {
+	t, err := s.GetSubtitle(ctx, animationID, subtitleID)
+	if err != nil {
+		return nil, err
+	}
+	tag, err := s.pool.Exec(ctx, `
+		DELETE FROM animation_subtitles WHERE id = $1 AND animation_id = $2`, subtitleID, animationID)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, pgx.ErrNoRows
+	}
+	return t, nil
+}
+
+func (s *Store) attachSubtitles(ctx context.Context, items []models.Animation) error {
+	if len(items) == 0 {
+		return nil
+	}
+	ids := make([]uuid.UUID, len(items))
+	index := make(map[uuid.UUID]int, len(items))
+	for i := range items {
+		ids[i] = items[i].ID
+		index[items[i].ID] = i
+		items[i].Subtitles = []models.SubtitleTrack{}
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, animation_id, language, label, file_path, created_at
+		FROM animation_subtitles
+		WHERE animation_id = ANY($1)
+		ORDER BY language, created_at`, ids)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var t models.SubtitleTrack
+		if err := rows.Scan(&t.ID, &t.AnimationID, &t.Language, &t.Label, &t.FilePath, &t.CreatedAt); err != nil {
+			return err
+		}
+		t.WithURL()
+		i, ok := index[t.AnimationID]
+		if !ok {
+			continue
+		}
+		items[i].Subtitles = append(items[i].Subtitles, t)
+	}
+	return rows.Err()
+}
+
 func (s *Store) ListBySeries(ctx context.Context, seriesID uuid.UUID) ([]models.Animation, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT `+animationSelect+`
@@ -227,6 +387,9 @@ func (s *Store) ListBySeries(ctx context.Context, seriesID uuid.UUID) ([]models.
 	defer rows.Close()
 	out, err := scanAnimationRows(rows)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.attachSubtitles(ctx, out); err != nil {
 		return nil, err
 	}
 	if err := s.attachWatchProgress(ctx, out); err != nil {

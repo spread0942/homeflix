@@ -27,36 +27,51 @@ func (s *Series) WithPosterURL() {
 }
 
 type Animation struct {
-	ID                   uuid.UUID  `json:"id"`
-	Name                 string     `json:"name"`
-	Description          string     `json:"description"`
-	VideoPath            string     `json:"-"`
-	PosterPath           string     `json:"-"`
-	SubtitlePath         string     `json:"-"`
-	ContentType          string     `json:"content_type"`
-	PlaybackStatus       string     `json:"playback_status"`
-	SeriesID             *uuid.UUID `json:"series_id,omitempty"`
-	SeriesName           string     `json:"series_name,omitempty"`
-	Season               *int       `json:"season,omitempty"`
-	Episode              *int       `json:"episode,omitempty"`
-	SortOrder            int        `json:"sort_order"`
-	CreatedAt            time.Time  `json:"created_at"`
-	PosterURL            string     `json:"poster_url"`
-	StreamURL            string     `json:"stream_url"`
-	SubtitleURL          string     `json:"subtitle_url,omitempty"`
-	Viewed               bool       `json:"viewed"` // episode/film finished
-	WatchPositionSeconds float64    `json:"watch_position_seconds,omitempty"`
-	WatchDurationSeconds float64    `json:"watch_duration_seconds,omitempty"`
+	ID                   uuid.UUID       `json:"id"`
+	Name                 string          `json:"name"`
+	Description          string          `json:"description"`
+	VideoPath            string          `json:"-"`
+	PosterPath           string          `json:"-"`
+	ContentType          string          `json:"content_type"`
+	PlaybackStatus       string          `json:"playback_status"`
+	SeriesID             *uuid.UUID      `json:"series_id,omitempty"`
+	SeriesName           string          `json:"series_name,omitempty"`
+	Season               *int            `json:"season,omitempty"`
+	Episode              *int            `json:"episode,omitempty"`
+	SortOrder            int             `json:"sort_order"`
+	CreatedAt            time.Time       `json:"created_at"`
+	PosterURL            string          `json:"poster_url"`
+	StreamURL            string          `json:"stream_url"`
+	Subtitles            []SubtitleTrack `json:"subtitles"`
+	Viewed               bool            `json:"viewed"` // episode/film finished
+	WatchPositionSeconds float64         `json:"watch_position_seconds,omitempty"`
+	WatchDurationSeconds float64         `json:"watch_duration_seconds,omitempty"`
+}
+
+// SubtitleTrack is one language track attached to a film/episode.
+type SubtitleTrack struct {
+	ID          uuid.UUID `json:"id"`
+	AnimationID uuid.UUID `json:"animation_id"`
+	Language    string    `json:"language"`
+	Label       string    `json:"label"`
+	FilePath    string    `json:"-"`
+	URL         string    `json:"url"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (t *SubtitleTrack) WithURL() {
+	t.URL = "/api/animations/" + t.AnimationID.String() + "/subtitles/" + t.ID.String()
 }
 
 func (a *Animation) WithURLs() {
 	id := a.ID.String()
 	a.PosterURL = "/api/animations/" + id + "/poster"
 	a.StreamURL = "/api/animations/" + id + "/stream"
-	if a.SubtitlePath != "" {
-		a.SubtitleURL = "/api/animations/" + id + "/subtitle"
-	} else {
-		a.SubtitleURL = ""
+	if a.Subtitles == nil {
+		a.Subtitles = []SubtitleTrack{}
+	}
+	for i := range a.Subtitles {
+		a.Subtitles[i].WithURL()
 	}
 }
 

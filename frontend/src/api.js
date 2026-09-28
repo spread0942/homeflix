@@ -69,6 +69,17 @@ export function updateAnimation(id, formData) {
   })
 }
 
+export function addAnimationSubtitles(id, formData) {
+  return request(`/animations/${id}/subtitles`, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export function deleteAnimationSubtitle(id, subtitleId) {
+  return request(`/animations/${id}/subtitles/${subtitleId}`, { method: 'DELETE' })
+}
+
 export function transcodeAnimation(id) {
   return request(`/animations/${id}/transcode`, { method: 'POST' })
 }
