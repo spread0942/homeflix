@@ -14,6 +14,7 @@ import {
   updateAnimation,
   updateSeries,
 } from '../api'
+import { entryLabel, groupBySeason } from '../lib/seriesNav'
 
 const route = useRoute()
 const router = useRouter()
@@ -86,6 +87,113 @@ const batchReplacePreview = computed(() => {
     items.push({ key: row.key, before: row.name, after })
   }
   return { error: null, items }
+})
+
+const inventoryQuery = ref('')
+const inventorySeries = ref('')
+const inventoryStatus = ref('')
+const inventorySubs = ref('')
+
+const inventoryFiltersActive = computed(
+  () =>
+    Boolean(
+      inventoryQuery.value.trim() ||
+        inventorySeries.value ||
+        inventoryStatus.value ||
+        inventorySubs.value,
+    ),
+)
+
+const inventorySeriesOptions = computed(() => {
+  const options = seriesList.value.map((s) => ({
+    value: s.id,
+    label: `${s.name} (${s.entry_count ?? 0})`,
+  }))
+  if (films.value.some((f) => !f.series_id)) {
+    options.push({ value: 'standalone', label: 'Standalone' })
+  }
+  return options
+})
+
+const filteredFilms = computed(() => {
+  const q = inventoryQuery.value.trim().toLowerCase()
+  const series = inventorySeries.value
+  const status = inventoryStatus.value
+  const subs = inventorySubs.value
+
+  return films.value.filter((film) => {
+    if (q) {
+      const hay = `${film.name || ''} ${film.series_name || ''} ${film.description || ''}`.toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    if (series === 'standalone') {
+      if (film.series_id) return false
+    } else if (series && film.series_id !== series) {
+      return false
+    }
+    if (status && (film.playback_status || 'ready') !== status) return false
+    if (subs === 'has' && !film.subtitles?.length) return false
+    if (subs === 'none' && film.subtitles?.length) return false
+    return true
+  })
+})
+
+function clearInventoryFilters() {
+  inventoryQuery.value = ''
+  inventorySeries.value = ''
+  inventoryStatus.value = ''
+  inventorySubs.value = ''
+}
+
+function sortInventoryFilms(list) {
+  return [...list].sort((a, b) => {
+    const sa = a.season == null ? Number.POSITIVE_INFINITY : a.season
+    const sb = b.season == null ? Number.POSITIVE_INFINITY : b.season
+    if (sa !== sb) return sa - sb
+    const ea = a.episode == null ? Number.POSITIVE_INFINITY : a.episode
+    const eb = b.episode == null ? Number.POSITIVE_INFINITY : b.episode
+    if (ea !== eb) return ea - eb
+    const oa = a.sort_order || 0
+    const ob = b.sort_order || 0
+    if (oa !== ob) return oa - ob
+    return (a.name || '').localeCompare(b.name || '')
+  })
+}
+
+/** Series → season → films for the admin inventory. */
+const filmsGrouped = computed(() => {
+  const map = new Map()
+  for (const film of filteredFilms.value) {
+    const key = film.series_id || 'standalone'
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        name: film.series_name || 'Standalone',
+        films: [],
+      })
+    }
+    map.get(key).films.push(film)
+  }
+
+  const groups = [...map.values()].map((g) => {
+    const seasons = groupBySeason(sortInventoryFilms(g.films))
+    const showSeasons =
+      seasons.length > 1 || (seasons.length === 1 && seasons[0].season != null)
+    return {
+      key: g.key,
+      name: g.name,
+      count: g.films.length,
+      showSeasons,
+      seasons,
+    }
+  })
+
+  groups.sort((a, b) => {
+    if (a.key === 'standalone') return 1
+    if (b.key === 'standalone') return -1
+    return a.name.localeCompare(b.name)
+  })
+  return groups
 })
 
 async function refresh() {
@@ -748,13 +856,8 @@ async function removeSeries(id, seriesLabel) {
   }
 }
 
-function filmMeta(film) {
-  const bits = []
-  if (film.series_name) bits.push(film.series_name)
-  if (film.season != null) bits.push(`S${film.season}`)
-  if (film.episode != null) bits.push(`E${film.episode}`)
-  if (!film.series_id && film.sort_order) bits.push(`#${film.sort_order}`)
-  return bits.join(' · ')
+function filmRowMeta(film) {
+  return entryLabel(film) || film.description || '—'
 }
 
 function rowStatusLabel(row) {
@@ -1148,36 +1251,119 @@ function rowStatusLabel(row) {
       </div>
 
       <div class="inventory">
-        <h2>All films</h2>
+        <h2>
+          All films
+          <span v-if="films.length" class="inventory-count">
+            <template v-if="inventoryFiltersActive">
+              {{ filteredFilms.length }} / {{ films.length }}
+            </template>
+            <template v-else>{{ films.length }}</template>
+          </span>
+        </h2>
+
+        <div v-if="films.length" class="inventory-filters">
+          <label class="inv-search">
+            <span class="sr-only">Search films</span>
+            <input
+              v-model="inventoryQuery"
+              type="search"
+              placeholder="Search titles…"
+              autocomplete="off"
+            />
+          </label>
+          <label>
+            <span class="sr-only">Series</span>
+            <select v-model="inventorySeries">
+              <option value="">All series</option>
+              <option
+                v-for="opt in inventorySeriesOptions"
+                :key="opt.value"
+                :value="opt.value"
+              >
+                {{ opt.label }}
+              </option>
+            </select>
+          </label>
+          <label>
+            <span class="sr-only">Status</span>
+            <select v-model="inventoryStatus">
+              <option value="">All statuses</option>
+              <option value="ready">Ready</option>
+              <option value="processing">Processing</option>
+              <option value="failed">Failed</option>
+            </select>
+          </label>
+          <label>
+            <span class="sr-only">Subtitles</span>
+            <select v-model="inventorySubs">
+              <option value="">Any subtitles</option>
+              <option value="has">Has CC</option>
+              <option value="none">No CC</option>
+            </select>
+          </label>
+          <button
+            v-if="inventoryFiltersActive"
+            type="button"
+            class="inv-clear"
+            @click="clearInventoryFilters"
+          >
+            Clear
+          </button>
+        </div>
+
         <div v-if="loading" class="state">Loading…</div>
-        <ul v-else-if="films.length" class="list">
-          <li v-for="film in films" :key="film.id">
-            <img :src="film.poster_url" :alt="film.name" />
-            <div>
-              <strong>{{ film.name }}</strong>
-              <p>
-                <span class="status-pill" :class="film.playback_status || 'ready'">{{
-                  film.playback_status || 'ready'
-                }}</span>
-                <span
-                  v-if="film.subtitles?.length"
-                  class="status-pill cc"
-                  :title="film.subtitles.map((t) => t.label || t.language).join(', ')"
-                >
-                  CC{{ film.subtitles.length > 1 ? `×${film.subtitles.length}` : '' }}
-                </span>
-                {{ filmMeta(film) || film.description || '—' }}
-              </p>
+        <div v-else-if="filmsGrouped.length" class="film-groups">
+          <details
+            v-for="group in filmsGrouped"
+            :key="group.key"
+            class="film-group"
+            open
+          >
+            <summary class="film-group-summary">
+              <span class="film-group-name">{{ group.name }}</span>
+              <span class="film-group-count">{{ group.count }}</span>
+            </summary>
+            <div class="film-group-body">
+              <template v-for="season in group.seasons" :key="season.key">
+                <h3 v-if="group.showSeasons" class="season-heading">{{ season.label }}</h3>
+                <ul class="list">
+                  <li v-for="film in season.entries" :key="film.id">
+                    <img :src="film.poster_url" :alt="film.name" />
+                    <div>
+                      <strong>{{ film.name }}</strong>
+                      <p>
+                        <span class="status-pill" :class="film.playback_status || 'ready'">{{
+                          film.playback_status || 'ready'
+                        }}</span>
+                        <span
+                          v-if="film.subtitles?.length"
+                          class="status-pill cc"
+                          :title="film.subtitles.map((t) => t.label || t.language).join(', ')"
+                        >
+                          CC{{ film.subtitles.length > 1 ? `×${film.subtitles.length}` : '' }}
+                        </span>
+                        {{ filmRowMeta(film) }}
+                      </p>
+                    </div>
+                    <div class="actions">
+                      <button type="button" class="edit" @click="startEditFilm(film)">Edit</button>
+                      <RouterLink :to="{ name: 'watch', params: { id: film.id } }">Watch</RouterLink>
+                      <button type="button" class="danger" @click="removeFilm(film.id, film.name)">
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+              </template>
             </div>
-            <div class="actions">
-              <button type="button" class="edit" @click="startEditFilm(film)">Edit</button>
-              <RouterLink :to="{ name: 'watch', params: { id: film.id } }">Watch</RouterLink>
-              <button type="button" class="danger" @click="removeFilm(film.id, film.name)">
-                Delete
-              </button>
-            </div>
-          </li>
-        </ul>
+          </details>
+        </div>
+        <div v-else-if="inventoryFiltersActive" class="state">
+          No films match these filters.
+          <button type="button" class="inv-clear inline" @click="clearInventoryFilters">
+            Clear filters
+          </button>
+        </div>
         <div v-else class="state">No films yet.</div>
       </div>
     </div>
@@ -1896,6 +2082,140 @@ option {
   margin: 0 0 1rem;
   font-family: var(--font-display);
   color: var(--cream);
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.inventory-count {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--cream) 55%, transparent);
+}
+
+.inventory-filters {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  align-items: end;
+}
+
+@media (min-width: 720px) {
+  .inventory-filters {
+    grid-template-columns: minmax(10rem, 1.4fr) repeat(3, minmax(7rem, 1fr)) auto;
+  }
+}
+
+.inventory-filters label {
+  margin: 0;
+  font-weight: 600;
+}
+
+.inventory-filters .inv-search {
+  min-width: 0;
+}
+
+.inventory-filters input,
+.inventory-filters select {
+  padding: 0.55rem 0.7rem;
+  font-weight: 600;
+}
+
+.inv-clear {
+  padding: 0.55rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 35%, transparent);
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--cream);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.inv-clear:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.inv-clear.inline {
+  display: inline-block;
+  margin-left: 0.65rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+  vertical-align: baseline;
+}
+
+.film-groups {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.film-group {
+  border: 1px solid color-mix(in srgb, var(--cream) 22%, transparent);
+  border-radius: 0.35rem;
+  overflow: hidden;
+}
+
+.film-group-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  list-style: none;
+  background: color-mix(in srgb, var(--cream) 6%, transparent);
+  color: var(--cream);
+  user-select: none;
+}
+
+.film-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.film-group-summary::before {
+  content: '▸';
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--cream) 55%, transparent);
+  transition: transform 0.15s ease;
+}
+
+.film-group[open] > .film-group-summary::before {
+  transform: rotate(90deg);
+}
+
+.film-group-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.film-group-count {
+  margin-left: auto;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--cream) 55%, transparent);
+}
+
+.film-group-body {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--cream) 14%, transparent);
+}
+
+.season-heading {
+  margin: 0.35rem 0 0;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--cream) 60%, transparent);
+}
+
+.season-heading + .list {
+  margin-top: 0.15rem;
 }
 
 .list {
