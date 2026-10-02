@@ -1009,11 +1009,30 @@ function rowStatusLabel(row) {
           >
             <summary class="film-group-summary">
               <span class="film-group-name">{{ group.name }}</span>
-              <span class="film-group-count">{{ group.count }}</span>
+              <span class="film-group-count">
+                <template v-if="group.showSeasons"
+                  >{{ group.seasons.length }} season{{
+                    group.seasons.length === 1 ? '' : 's'
+                  }}
+                  · </template
+                >{{ group.count }} episode{{ group.count === 1 ? '' : 's' }}
+              </span>
             </summary>
             <div class="film-group-body">
-              <template v-for="seasonGroup in group.seasons" :key="seasonGroup.key">
-                <h3 v-if="group.showSeasons" class="season-heading">{{ seasonGroup.label }}</h3>
+              <component
+                :is="group.showSeasons ? 'details' : 'div'"
+                v-for="seasonGroup in group.seasons"
+                :key="seasonGroup.key"
+                class="season-group"
+                v-bind="group.showSeasons ? { open: true } : {}"
+              >
+                <summary v-if="group.showSeasons" class="season-summary">
+                  <span class="season-heading">{{ seasonGroup.label }}</span>
+                  <span class="season-count">
+                    {{ seasonGroup.entries.length }}
+                    episode{{ seasonGroup.entries.length === 1 ? '' : 's' }}
+                  </span>
+                </summary>
                 <ul class="list">
                   <li
                     v-for="film in seasonGroup.entries"
@@ -1231,7 +1250,7 @@ function rowStatusLabel(row) {
                     </form>
                   </li>
                 </ul>
-              </template>
+              </component>
             </div>
           </details>
         </div>
@@ -2409,18 +2428,62 @@ option {
   border-top: 1px solid color-mix(in srgb, var(--cream) 14%, transparent);
 }
 
+.season-group {
+  border: 1px solid color-mix(in srgb, var(--cream) 14%, transparent);
+  border-radius: 0.3rem;
+  overflow: hidden;
+}
+
+.season-group > .list {
+  padding: 0.65rem;
+}
+
+details.season-group > .list {
+  border-top: 1px solid color-mix(in srgb, var(--cream) 12%, transparent);
+}
+
+.season-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  background: color-mix(in srgb, var(--cream) 4%, transparent);
+}
+
+.season-summary::-webkit-details-marker {
+  display: none;
+}
+
+.season-summary::before {
+  content: '▸';
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--cream) 50%, transparent);
+  transition: transform 0.15s ease;
+}
+
+.season-group[open] > .season-summary::before {
+  transform: rotate(90deg);
+}
+
 .season-heading {
-  margin: 0.35rem 0 0;
+  margin: 0;
   font-family: var(--font-display);
   font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--cream) 60%, transparent);
+  color: color-mix(in srgb, var(--cream) 70%, transparent);
 }
 
-.season-heading + .list {
-  margin-top: 0.15rem;
+.season-count {
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--cream) 50%, transparent);
 }
 
 .list {
