@@ -9,6 +9,7 @@ import {
   deleteAnimationSubtitle,
   deleteSeries,
   addAnimationSubtitles,
+  getAnimation,
   listAnimations,
   listSeries,
   updateAnimation,
@@ -198,9 +199,9 @@ const filmsGrouped = computed(() => {
   return groups
 })
 
-async function refresh() {
-  loading.value = true
-  error.value = ''
+async function refresh({ silent = false } = {}) {
+  if (!silent) loading.value = true
+  if (!silent) error.value = ''
   try {
     const [a, s] = await Promise.all([listAnimations(), listSeries()])
     films.value = a
@@ -208,7 +209,23 @@ async function refresh() {
   } catch (e) {
     error.value = e.message
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
+  }
+}
+
+/** Replace one film in the inventory without remounting the whole list. */
+function upsertFilm(film) {
+  if (!film?.id) return
+  const i = films.value.findIndex((f) => f.id === film.id)
+  if (i >= 0) films.value.splice(i, 1, film)
+  else films.value = [film, ...films.value]
+}
+
+async function refreshSeriesQuietly() {
+  try {
+    seriesList.value = await listSeries()
+  } catch {
+    /* keep existing series list */
   }
 }
 
@@ -763,20 +780,21 @@ async function onSubmit(e) {
 
   submitting.value = true
   try {
-    await updateAnimation(editingFilmId.value, form)
+    const filmId = editingFilmId.value
+    let updated = await updateAnimation(filmId, form)
     if (pendingSubtitles.value.length) {
       const subForm = new FormData()
       for (const sub of pendingSubtitles.value) {
         subForm.append('subtitle', sub.file)
         subForm.append('subtitle_lang', sub.lang || 'und')
       }
-      await addAnimationSubtitles(editingFilmId.value, subForm)
+      await addAnimationSubtitles(filmId, subForm)
+      updated = await getAnimation(filmId)
     }
+    upsertFilm(updated)
+    await refreshSeriesQuietly()
     success.value = `"${name.value.trim()}" updated.`
-    const keepSeries = seriesId.value
-    resetFilmForm(keepSeries)
-    await refresh()
-    applySeriesDefaults(keepSeries)
+    resetFilmForm(seriesId.value)
   } catch (err) {
     error.value = err.message
   } finally {
@@ -789,10 +807,17 @@ async function removeEditingSubtitle(track) {
   if (!confirm(`Remove ${track.label || track.language} subtitles?`)) return
   error.value = ''
   try {
-    await deleteAnimationSubtitle(editingFilmId.value, track.id)
+    const filmId = editingFilmId.value
+    await deleteAnimationSubtitle(filmId, track.id)
     editingSubtitles.value = editingSubtitles.value.filter((t) => t.id !== track.id)
+    const current = films.value.find((f) => f.id === filmId)
+    if (current) {
+      upsertFilm({
+        ...current,
+        subtitles: (current.subtitles || []).filter((t) => t.id !== track.id),
+      })
+    }
     success.value = `Removed ${track.label || track.language} subtitles.`
-    await refresh()
   } catch (err) {
     error.value = err.message
   }
@@ -863,7 +888,8 @@ async function removeFilm(id, filmName) {
   try {
     await deleteAnimation(id)
     if (editingFilmId.value === id) resetFilmForm()
-    await refresh()
+    films.value = films.value.filter((f) => f.id !== id)
+    await refreshSeriesQuietly()
   } catch (e) {
     error.value = e.message
   }
