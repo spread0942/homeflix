@@ -11,7 +11,7 @@ const router = createRouter({
     { path: '/series/:id', name: 'series', component: SeriesView, props: true },
     { path: '/watch/:id', name: 'watch', component: WatchView, props: true },
     { path: '/admin', redirect: { name: 'admin-films' } },
-    { path: '/admin/upload', redirect: { name: 'admin-films' } },
+    { path: '/admin/upload', name: 'admin-upload', component: AdminView },
     { path: '/admin/films', name: 'admin-films', component: AdminView },
     { path: '/admin/series', name: 'admin-series', component: AdminView },
     { path: '/admin/conversions', name: 'admin-conversions', component: AdminView },

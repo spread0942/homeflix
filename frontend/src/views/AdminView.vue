@@ -21,6 +21,7 @@ const router = useRouter()
 const section = computed(() => {
   if (route.name === 'admin-series') return 'series'
   if (route.name === 'admin-conversions') return 'conversions'
+  if (route.name === 'admin-upload') return 'upload'
   return 'films'
 })
 
@@ -599,6 +600,10 @@ function resetSeriesForm() {
   if (seriesFormEl.value) seriesFormEl.value.reset()
 }
 
+function setFilmFormEl(el) {
+  filmFormEl.value = el || null
+}
+
 function startEditFilm(film) {
   if (route.name !== 'admin-films') router.push({ name: 'admin-films' })
   editingFilmId.value = film.id
@@ -616,7 +621,9 @@ function startEditFilm(film) {
   success.value = ''
   error.value = ''
   nextTick(() => {
-    filmFormEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    document
+      .querySelector('.film-item.editing')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   })
 }
 
@@ -891,6 +898,7 @@ function rowStatusLabel(row) {
   <section class="admin">
     <nav class="tabs" aria-label="Admin sections">
       <RouterLink class="tab" :to="{ name: 'admin-films' }">Films</RouterLink>
+      <RouterLink class="tab" :to="{ name: 'admin-upload' }">Upload</RouterLink>
       <RouterLink class="tab" :to="{ name: 'admin-series' }">Series</RouterLink>
       <RouterLink class="tab" :to="{ name: 'admin-conversions' }">Conversions</RouterLink>
     </nav>
@@ -899,107 +907,292 @@ function rowStatusLabel(row) {
     <p v-if="section !== 'conversions' && error" class="banner err">{{ error }}</p>
 
     <div v-if="section === 'films'" class="panel">
-      <!-- Edit existing film -->
-      <form v-if="editingFilm" ref="filmFormEl" class="form" @submit="onSubmit">
-        <h2>Edit film / episode</h2>
-        <label>
-          Name
-          <input
-            v-model="name"
-            type="text"
-            required
-            maxlength="200"
-            placeholder="Film or episode title"
-          />
-        </label>
-        <label>
-          Description
-          <textarea
-            v-model="description"
-            rows="3"
-            maxlength="2000"
-            placeholder="Log entry / synopsis"
-          />
-        </label>
-        <label>
-          Series (optional)
-          <select v-model="seriesId" @change="onSeriesChange">
-            <option value="">Standalone — no series</option>
-            <option v-for="s in seriesList" :key="s.id" :value="s.id">
-              {{ s.name }} ({{ s.entry_count }})
-            </option>
-          </select>
-        </label>
-        <div v-if="inSeries" class="row3">
-          <label>
-            Season
-            <input v-model="season" type="number" min="1" placeholder="e.g. 1" />
-          </label>
-          <label>
-            Episode
-            <input v-model="episode" type="number" min="1" placeholder="e.g. 12" />
-          </label>
-          <label>
-            Sort / part
-            <input v-model="sortOrder" type="number" placeholder="1 for Part One" />
-          </label>
-        </div>
-        <p v-if="inSeries" class="hint">
-          Movies in a franchise: leave season/episode empty and use sort (1, 2…). Anime/TV: set
-          season + episode.
-        </p>
-        <label>
-          New poster (optional)
-          <input type="file" accept="image/*" @change="onPosterChange" />
-          <span class="field-note">Leave empty to keep the current poster</span>
-        </label>
+      <div class="inventory inventory-standalone">
+        <h2>
+          All films
+          <span v-if="films.length" class="inventory-count">
+            <template v-if="inventoryFiltersActive">
+              {{ filteredFilms.length }} / {{ films.length }}
+            </template>
+            <template v-else>{{ films.length }}</template>
+          </span>
+        </h2>
 
-        <div class="sub-edit">
-          <h3 class="sub-edit-title">Subtitles</h3>
-          <ul v-if="editingSubtitles.length" class="sub-track-list">
-            <li v-for="track in editingSubtitles" :key="track.id">
-              <span class="sub-track-label">{{ track.label || track.language }}</span>
-              <span class="sub-track-code">{{ track.language }}</span>
-              <button
-                type="button"
-                class="danger icon-btn"
-                :aria-label="`Remove ${track.label || track.language}`"
-                @click="removeEditingSubtitle(track)"
+        <div v-if="films.length" class="inventory-filters">
+          <label class="inv-search">
+            <span class="sr-only">Search films</span>
+            <input
+              v-model="inventoryQuery"
+              type="search"
+              placeholder="Search titles…"
+              autocomplete="off"
+            />
+          </label>
+          <label>
+            <span class="sr-only">Series</span>
+            <select v-model="inventorySeries">
+              <option value="">All series</option>
+              <option
+                v-for="opt in inventorySeriesOptions"
+                :key="opt.value"
+                :value="opt.value"
               >
-                ✕
-              </button>
-            </li>
-          </ul>
-          <p v-else class="field-note">No subtitle tracks yet.</p>
-          <div class="sub-add-row">
-            <label>
-              Language
-              <select v-model="addSubtitleLang">
-                <option v-for="opt in SUBTITLE_LANG_OPTIONS" :key="opt.code" :value="opt.code">
-                  {{ opt.label }}
-                </option>
-              </select>
-            </label>
-            <label>
-              Add .srt / .vtt
-              <input type="file" accept=".srt,.vtt,text/vtt" @change="onAddSubtitleFileChange" />
-            </label>
-          </div>
-          <span v-if="addSubtitleFile" class="field-note">Will upload {{ addSubtitleFile.name }}</span>
+                {{ opt.label }}
+              </option>
+            </select>
+          </label>
+          <label>
+            <span class="sr-only">Status</span>
+            <select v-model="inventoryStatus">
+              <option value="">All statuses</option>
+              <option value="ready">Ready</option>
+              <option value="processing">Processing</option>
+              <option value="failed">Failed</option>
+            </select>
+          </label>
+          <label>
+            <span class="sr-only">Subtitles</span>
+            <select v-model="inventorySubs">
+              <option value="">Any subtitles</option>
+              <option value="has">Has CC</option>
+              <option value="none">No CC</option>
+            </select>
+          </label>
+          <button
+            v-if="inventoryFiltersActive"
+            type="button"
+            class="inv-clear"
+            @click="clearInventoryFilters"
+          >
+            Clear
+          </button>
         </div>
 
-        <div class="form-actions">
-          <button class="submit" type="submit" :disabled="submitting">
-            {{ submitting ? 'Saving…' : 'Save changes' }}
-          </button>
-          <button type="button" class="cancel" :disabled="submitting" @click="cancelEditFilm">
-            Cancel
+        <div v-if="loading" class="state">Loading…</div>
+        <div v-else-if="filmsGrouped.length" class="film-groups">
+          <details
+            v-for="group in filmsGrouped"
+            :key="group.key"
+            class="film-group"
+            open
+          >
+            <summary class="film-group-summary">
+              <span class="film-group-name">{{ group.name }}</span>
+              <span class="film-group-count">{{ group.count }}</span>
+            </summary>
+            <div class="film-group-body">
+              <template v-for="seasonGroup in group.seasons" :key="seasonGroup.key">
+                <h3 v-if="group.showSeasons" class="season-heading">{{ seasonGroup.label }}</h3>
+                <ul class="list">
+                  <li
+                    v-for="film in seasonGroup.entries"
+                    :key="film.id"
+                    class="film-item"
+                    :class="{ editing: editingFilmId === film.id }"
+                  >
+                    <div class="film-row">
+                      <img :src="film.poster_url" :alt="film.name" />
+                      <div>
+                        <strong>{{ film.name }}</strong>
+                        <p>
+                          <span class="status-pill" :class="film.playback_status || 'ready'">{{
+                            film.playback_status || 'ready'
+                          }}</span>
+                          <span
+                            class="sub-badge"
+                            :class="film.subtitles?.length ? 'has' : 'none'"
+                            :title="subtitleTitle(film)"
+                          >
+                            <svg
+                              class="sub-icon"
+                              viewBox="0 0 24 24"
+                              width="14"
+                              height="14"
+                              aria-hidden="true"
+                            >
+                              <rect
+                                x="2"
+                                y="4"
+                                width="20"
+                                height="16"
+                                rx="2"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                              />
+                              <path
+                                d="M5 15h4M11 15h8M5 11h8M15 11h4"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                              />
+                            </svg>
+                            <template v-if="film.subtitles?.length">
+                              Subs
+                              <span class="sub-langs">{{ subtitleLangs(film) }}</span>
+                            </template>
+                            <template v-else>No subs</template>
+                          </span>
+                          {{ filmRowMeta(film) }}
+                        </p>
+                      </div>
+                      <div class="actions">
+                        <button
+                          type="button"
+                          class="edit"
+                          @click="
+                            editingFilmId === film.id ? cancelEditFilm() : startEditFilm(film)
+                          "
+                        >
+                          {{ editingFilmId === film.id ? 'Close' : 'Edit' }}
+                        </button>
+                        <RouterLink :to="{ name: 'watch', params: { id: film.id } }">Watch</RouterLink>
+                        <button
+                          type="button"
+                          class="danger"
+                          @click="removeFilm(film.id, film.name)"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+
+                    <form
+                      v-if="editingFilmId === film.id"
+                      :ref="(el) => setFilmFormEl(el)"
+                      class="form inline-edit"
+                      @submit="onSubmit"
+                    >
+                      <h3 class="inline-edit-title">Edit film / episode</h3>
+                      <label>
+                        Name
+                        <input
+                          v-model="name"
+                          type="text"
+                          required
+                          maxlength="200"
+                          placeholder="Film or episode title"
+                        />
+                      </label>
+                      <label>
+                        Description
+                        <textarea
+                          v-model="description"
+                          rows="3"
+                          maxlength="2000"
+                          placeholder="Log entry / synopsis"
+                        />
+                      </label>
+                      <label>
+                        Series (optional)
+                        <select v-model="seriesId" @change="onSeriesChange">
+                          <option value="">Standalone — no series</option>
+                          <option v-for="s in seriesList" :key="s.id" :value="s.id">
+                            {{ s.name }} ({{ s.entry_count }})
+                          </option>
+                        </select>
+                      </label>
+                      <div v-if="inSeries" class="row3">
+                        <label>
+                          Season
+                          <input v-model="season" type="number" min="1" placeholder="e.g. 1" />
+                        </label>
+                        <label>
+                          Episode
+                          <input v-model="episode" type="number" min="1" placeholder="e.g. 12" />
+                        </label>
+                        <label>
+                          Sort / part
+                          <input v-model="sortOrder" type="number" placeholder="1 for Part One" />
+                        </label>
+                      </div>
+                      <p v-if="inSeries" class="hint">
+                        Movies in a franchise: leave season/episode empty and use sort (1, 2…).
+                        Anime/TV: set season + episode.
+                      </p>
+                      <label>
+                        New poster (optional)
+                        <input type="file" accept="image/*" @change="onPosterChange" />
+                        <span class="field-note">Leave empty to keep the current poster</span>
+                      </label>
+
+                      <div class="sub-edit">
+                        <h3 class="sub-edit-title">Subtitles</h3>
+                        <ul v-if="editingSubtitles.length" class="sub-track-list">
+                          <li v-for="track in editingSubtitles" :key="track.id">
+                            <span class="sub-track-label">{{ track.label || track.language }}</span>
+                            <span class="sub-track-code">{{ track.language }}</span>
+                            <button
+                              type="button"
+                              class="danger icon-btn"
+                              :aria-label="`Remove ${track.label || track.language}`"
+                              @click="removeEditingSubtitle(track)"
+                            >
+                              ✕
+                            </button>
+                          </li>
+                        </ul>
+                        <p v-else class="field-note">No subtitle tracks yet.</p>
+                        <div class="sub-add-row">
+                          <label>
+                            Language
+                            <select v-model="addSubtitleLang">
+                              <option
+                                v-for="opt in SUBTITLE_LANG_OPTIONS"
+                                :key="opt.code"
+                                :value="opt.code"
+                              >
+                                {{ opt.label }}
+                              </option>
+                            </select>
+                          </label>
+                          <label>
+                            Add .srt / .vtt
+                            <input
+                              type="file"
+                              accept=".srt,.vtt,text/vtt"
+                              @change="onAddSubtitleFileChange"
+                            />
+                          </label>
+                        </div>
+                        <span v-if="addSubtitleFile" class="field-note"
+                          >Will upload {{ addSubtitleFile.name }}</span
+                        >
+                      </div>
+
+                      <div class="form-actions">
+                        <button class="submit" type="submit" :disabled="submitting">
+                          {{ submitting ? 'Saving…' : 'Save changes' }}
+                        </button>
+                        <button
+                          type="button"
+                          class="cancel"
+                          :disabled="submitting"
+                          @click="cancelEditFilm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </li>
+                </ul>
+              </template>
+            </div>
+          </details>
+        </div>
+        <div v-else-if="inventoryFiltersActive" class="state">
+          No films match these filters.
+          <button type="button" class="inv-clear inline" @click="clearInventoryFilters">
+            Clear filters
           </button>
         </div>
-      </form>
+        <div v-else class="state">No films yet.</div>
+      </div>
+    </div>
 
-      <!-- Bulk upload -->
-      <div v-else class="batch form-wide">
+    <div v-else-if="section === 'upload'" class="panel">
+      <div class="batch form-wide">
         <div class="batch-head">
           <h2>Upload films / episodes</h2>
           <p class="hint">
@@ -1267,152 +1460,6 @@ function rowStatusLabel(row) {
             Clear queue
           </button>
         </div>
-      </div>
-
-      <div class="inventory">
-        <h2>
-          All films
-          <span v-if="films.length" class="inventory-count">
-            <template v-if="inventoryFiltersActive">
-              {{ filteredFilms.length }} / {{ films.length }}
-            </template>
-            <template v-else>{{ films.length }}</template>
-          </span>
-        </h2>
-
-        <div v-if="films.length" class="inventory-filters">
-          <label class="inv-search">
-            <span class="sr-only">Search films</span>
-            <input
-              v-model="inventoryQuery"
-              type="search"
-              placeholder="Search titles…"
-              autocomplete="off"
-            />
-          </label>
-          <label>
-            <span class="sr-only">Series</span>
-            <select v-model="inventorySeries">
-              <option value="">All series</option>
-              <option
-                v-for="opt in inventorySeriesOptions"
-                :key="opt.value"
-                :value="opt.value"
-              >
-                {{ opt.label }}
-              </option>
-            </select>
-          </label>
-          <label>
-            <span class="sr-only">Status</span>
-            <select v-model="inventoryStatus">
-              <option value="">All statuses</option>
-              <option value="ready">Ready</option>
-              <option value="processing">Processing</option>
-              <option value="failed">Failed</option>
-            </select>
-          </label>
-          <label>
-            <span class="sr-only">Subtitles</span>
-            <select v-model="inventorySubs">
-              <option value="">Any subtitles</option>
-              <option value="has">Has CC</option>
-              <option value="none">No CC</option>
-            </select>
-          </label>
-          <button
-            v-if="inventoryFiltersActive"
-            type="button"
-            class="inv-clear"
-            @click="clearInventoryFilters"
-          >
-            Clear
-          </button>
-        </div>
-
-        <div v-if="loading" class="state">Loading…</div>
-        <div v-else-if="filmsGrouped.length" class="film-groups">
-          <details
-            v-for="group in filmsGrouped"
-            :key="group.key"
-            class="film-group"
-            open
-          >
-            <summary class="film-group-summary">
-              <span class="film-group-name">{{ group.name }}</span>
-              <span class="film-group-count">{{ group.count }}</span>
-            </summary>
-            <div class="film-group-body">
-              <template v-for="season in group.seasons" :key="season.key">
-                <h3 v-if="group.showSeasons" class="season-heading">{{ season.label }}</h3>
-                <ul class="list">
-                  <li v-for="film in season.entries" :key="film.id">
-                    <img :src="film.poster_url" :alt="film.name" />
-                    <div>
-                      <strong>{{ film.name }}</strong>
-                      <p>
-                        <span class="status-pill" :class="film.playback_status || 'ready'">{{
-                          film.playback_status || 'ready'
-                        }}</span>
-                        <span
-                          class="sub-badge"
-                          :class="film.subtitles?.length ? 'has' : 'none'"
-                          :title="subtitleTitle(film)"
-                        >
-                          <svg
-                            class="sub-icon"
-                            viewBox="0 0 24 24"
-                            width="14"
-                            height="14"
-                            aria-hidden="true"
-                          >
-                            <rect
-                              x="2"
-                              y="4"
-                              width="20"
-                              height="16"
-                              rx="2"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                            />
-                            <path
-                              d="M5 15h4M11 15h8M5 11h8M15 11h4"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                            />
-                          </svg>
-                          <template v-if="film.subtitles?.length">
-                            Subs
-                            <span class="sub-langs">{{ subtitleLangs(film) }}</span>
-                          </template>
-                          <template v-else>No subs</template>
-                        </span>
-                        {{ filmRowMeta(film) }}
-                      </p>
-                    </div>
-                    <div class="actions">
-                      <button type="button" class="edit" @click="startEditFilm(film)">Edit</button>
-                      <RouterLink :to="{ name: 'watch', params: { id: film.id } }">Watch</RouterLink>
-                      <button type="button" class="danger" @click="removeFilm(film.id, film.name)">
-                        Delete
-                      </button>
-                    </div>
-                  </li>
-                </ul>
-              </template>
-            </div>
-          </details>
-        </div>
-        <div v-else-if="inventoryFiltersActive" class="state">
-          No films match these filters.
-          <button type="button" class="inv-clear inline" @click="clearInventoryFilters">
-            Clear filters
-          </button>
-        </div>
-        <div v-else class="state">No films yet.</div>
       </div>
     </div>
 
@@ -2160,6 +2207,10 @@ option {
   margin-top: 2rem;
 }
 
+.inventory-standalone {
+  margin-top: 0;
+}
+
 .inventory h2 {
   margin: 0 0 1rem;
   font-family: var(--font-display);
@@ -2308,15 +2359,51 @@ option {
   gap: 0.85rem;
 }
 
-.list li {
-  display: grid;
-  grid-template-columns: 64px 1fr auto;
-  gap: 0.9rem;
-  align-items: center;
+.list > li {
   padding: 0.75rem;
   background: transparent;
   border: 1px solid color-mix(in srgb, var(--cream) 22%, transparent);
   border-radius: 0.35rem;
+  color: var(--cream);
+}
+
+.list > li:not(.film-item) {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.film-item {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.film-item.editing {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.film-row {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.inline-edit {
+  margin: 0;
+  max-width: none;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--cream) 18%, transparent);
+  border-radius: 0.3rem;
+  background: color-mix(in srgb, var(--cream) 4%, transparent);
+}
+
+.inline-edit-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
   color: var(--cream);
 }
 
@@ -2393,11 +2480,13 @@ option {
 }
 
 @media (max-width: 560px) {
-  .list li {
+  .list > li:not(.film-item),
+  .film-row {
     grid-template-columns: 56px 1fr;
   }
 
-  .actions {
+  .list > li:not(.film-item) .actions,
+  .film-row .actions {
     grid-column: 1 / -1;
     flex-direction: row;
   }
