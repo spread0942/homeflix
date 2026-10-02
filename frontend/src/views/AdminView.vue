@@ -43,8 +43,9 @@ const sortOrder = ref('0')
 const videoFile = ref(null)
 const posterFile = ref(null)
 const editingSubtitles = ref([])
-const addSubtitleFile = ref(null)
+const pendingSubtitles = ref([]) // { key, file, lang, label }
 const addSubtitleLang = ref('it')
+const addSubtitleInput = ref(null)
 const filmFormEl = ref(null)
 
 const batchItems = ref([])
@@ -564,12 +565,38 @@ function onPosterChange(e) {
   posterFile.value = e.target.files?.[0] || null
 }
 
+function subtitleLangLabel(code) {
+  return SUBTITLE_LANG_OPTIONS.find((o) => o.code === code)?.label || code || 'Subtitles'
+}
+
 function onAddSubtitleFileChange(e) {
-  addSubtitleFile.value = e.target.files?.[0] || null
-  if (addSubtitleFile.value) {
-    const parsed = parseSubtitleFilename(addSubtitleFile.value.name)
-    if (parsed.lang !== 'und') addSubtitleLang.value = parsed.lang
+  const file = e.target.files?.[0] || null
+  if (addSubtitleInput.value) addSubtitleInput.value.value = ''
+  if (!file) return
+
+  const parsed = parseSubtitleFilename(file.name)
+  const lang = parsed.lang !== 'und' ? parsed.lang : addSubtitleLang.value || 'und'
+  const label = subtitleLangLabel(lang)
+  const existing = pendingSubtitles.value.findIndex((s) => s.lang === lang)
+  const entry = {
+    key: `${lang}-${file.name}-${Date.now()}`,
+    file,
+    lang,
+    label,
   }
+  if (existing >= 0) pendingSubtitles.value[existing] = entry
+  else pendingSubtitles.value.push(entry)
+
+  const used = new Set([
+    ...editingSubtitles.value.map((t) => t.language),
+    ...pendingSubtitles.value.map((s) => s.lang),
+  ])
+  const next = SUBTITLE_LANG_OPTIONS.find((o) => o.code !== 'und' && !used.has(o.code))
+  addSubtitleLang.value = next?.code || 'und'
+}
+
+function removePendingSubtitle(key) {
+  pendingSubtitles.value = pendingSubtitles.value.filter((s) => s.key !== key)
 }
 
 function onSeriesPosterChange(e) {
@@ -584,8 +611,9 @@ function resetFilmForm(keepSeries = '') {
   videoFile.value = null
   posterFile.value = null
   editingSubtitles.value = []
-  addSubtitleFile.value = null
+  pendingSubtitles.value = []
   addSubtitleLang.value = 'it'
+  if (addSubtitleInput.value) addSubtitleInput.value.value = ''
   if (filmFormEl.value) filmFormEl.value.reset()
   seriesId.value = keepSeries
   applySeriesDefaults(keepSeries)
@@ -616,8 +644,9 @@ function startEditFilm(film) {
   videoFile.value = null
   posterFile.value = null
   editingSubtitles.value = [...(film.subtitles || [])]
-  addSubtitleFile.value = null
+  pendingSubtitles.value = []
   addSubtitleLang.value = 'it'
+  if (addSubtitleInput.value) addSubtitleInput.value.value = ''
   success.value = ''
   error.value = ''
   nextTick(() => {
@@ -735,10 +764,12 @@ async function onSubmit(e) {
   submitting.value = true
   try {
     await updateAnimation(editingFilmId.value, form)
-    if (addSubtitleFile.value) {
+    if (pendingSubtitles.value.length) {
       const subForm = new FormData()
-      subForm.append('subtitle', addSubtitleFile.value)
-      subForm.append('subtitle_lang', addSubtitleLang.value || 'und')
+      for (const sub of pendingSubtitles.value) {
+        subForm.append('subtitle', sub.file)
+        subForm.append('subtitle_lang', sub.lang || 'und')
+      }
       await addAnimationSubtitles(editingFilmId.value, subForm)
     }
     success.value = `"${name.value.trim()}" updated.`
@@ -1134,6 +1165,27 @@ function rowStatusLabel(row) {
                           </li>
                         </ul>
                         <p v-else class="field-note">No subtitle tracks yet.</p>
+
+                        <ul v-if="pendingSubtitles.length" class="sub-track-list pending">
+                          <li v-for="sub in pendingSubtitles" :key="sub.key">
+                            <span class="sub-track-label">
+                              {{ sub.label }}
+                              <span class="pending-file" :title="sub.file.name">{{
+                                sub.file.name
+                              }}</span>
+                            </span>
+                            <span class="sub-track-code">{{ sub.lang }}</span>
+                            <button
+                              type="button"
+                              class="danger icon-btn"
+                              :aria-label="`Remove pending ${sub.label}`"
+                              @click="removePendingSubtitle(sub.key)"
+                            >
+                              ✕
+                            </button>
+                          </li>
+                        </ul>
+
                         <div class="sub-add-row">
                           <label>
                             Language
@@ -1150,15 +1202,17 @@ function rowStatusLabel(row) {
                           <label>
                             Add .srt / .vtt
                             <input
+                              ref="addSubtitleInput"
                               type="file"
                               accept=".srt,.vtt,text/vtt"
                               @change="onAddSubtitleFileChange"
                             />
                           </label>
                         </div>
-                        <span v-if="addSubtitleFile" class="field-note"
-                          >Will upload {{ addSubtitleFile.name }}</span
-                        >
+                        <p class="field-note">
+                          Pick a language and file to queue it. Repeat for more languages, then
+                          save.
+                        </p>
                       </div>
 
                       <div class="form-actions">
@@ -2142,6 +2196,24 @@ option {
 .sub-track-label {
   font-weight: 700;
   color: var(--cream);
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.pending-file {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--cream) 55%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sub-track-list.pending li {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .sub-track-code {
