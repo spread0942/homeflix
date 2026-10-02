@@ -860,6 +860,25 @@ function filmRowMeta(film) {
   return entryLabel(film) || film.description || '—'
 }
 
+function subtitleLangs(film) {
+  const tracks = film.subtitles || []
+  if (!tracks.length) return ''
+  return tracks
+    .map((t) => {
+      const code = String(t.language || '').trim()
+      if (code && code !== 'und') return code.toUpperCase()
+      return String(t.label || 'UND').toUpperCase()
+    })
+    .join(' · ')
+}
+
+function subtitleTitle(film) {
+  const tracks = film.subtitles || []
+  if (!tracks.length) return 'No subtitles'
+  const detail = tracks.map((t) => t.label || t.language || 'und').join(', ')
+  return `Subtitles: ${detail}`
+}
+
 function rowStatusLabel(row) {
   if (row.status === 'uploading') return 'Uploading…'
   if (row.status === 'done') return 'Done'
@@ -1336,11 +1355,40 @@ function rowStatusLabel(row) {
                           film.playback_status || 'ready'
                         }}</span>
                         <span
-                          v-if="film.subtitles?.length"
-                          class="status-pill cc"
-                          :title="film.subtitles.map((t) => t.label || t.language).join(', ')"
+                          class="sub-badge"
+                          :class="film.subtitles?.length ? 'has' : 'none'"
+                          :title="subtitleTitle(film)"
                         >
-                          CC{{ film.subtitles.length > 1 ? `×${film.subtitles.length}` : '' }}
+                          <svg
+                            class="sub-icon"
+                            viewBox="0 0 24 24"
+                            width="14"
+                            height="14"
+                            aria-hidden="true"
+                          >
+                            <rect
+                              x="2"
+                              y="4"
+                              width="20"
+                              height="16"
+                              rx="2"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                            />
+                            <path
+                              d="M5 15h4M11 15h8M5 11h8M15 11h4"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                            />
+                          </svg>
+                          <template v-if="film.subtitles?.length">
+                            Subs
+                            <span class="sub-langs">{{ subtitleLangs(film) }}</span>
+                          </template>
+                          <template v-else>No subs</template>
                         </span>
                         {{ filmRowMeta(film) }}
                       </p>
@@ -1534,6 +1582,40 @@ function rowStatusLabel(row) {
   border: 1px solid color-mix(in srgb, var(--cream) 45%, transparent);
   color: var(--cream);
   letter-spacing: 0.06em;
+}
+
+.sub-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-right: 0.4rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.sub-badge .sub-icon {
+  flex-shrink: 0;
+}
+
+.sub-badge.has {
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.sub-badge.none {
+  border: 1px solid color-mix(in srgb, var(--cream) 18%, transparent);
+  color: color-mix(in srgb, var(--cream) 40%, transparent);
+}
+
+.sub-badge .sub-langs {
+  font-weight: 800;
+  opacity: 0.95;
 }
 
 .check-row {
