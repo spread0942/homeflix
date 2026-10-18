@@ -6,6 +6,7 @@ services:
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=homeflix
       - --entrypoints.web.address=:80
+      - --entrypoints.web.transport.respondingTimeouts.readTimeout=0
       - --api.dashboard=false
     environment:
       DOCKER_API_VERSION: "1.44"
@@ -39,6 +40,7 @@ services:
       DATABASE_URL: postgres://sunny:sunny@postgres:5432/thousand_sunny?sslmode=disable
       MEDIA_ROOT: /data
       PORT: "8080"
+      MAX_UPLOAD_GB: "50"
     volumes:
       - media_data:/data
     labels:

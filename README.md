@@ -45,6 +45,7 @@ docker compose -f docker-compose.yml up --build
 | `DATABASE_URL` | `postgres://sunny:sunny@postgres:5432/thousand_sunny?sslmode=disable` | Postgres connection (name kept for existing volume) |
 | `MEDIA_ROOT` | `/data` | Video + poster storage |
 | `PORT` | `8080` | API listen port |
+| `MAX_UPLOAD_GB` | `50` | Maximum size of a single film/episode upload |
 
 Media files live in the Docker volume `media_data`. **Firefox/Chrome need H.264 video + AAC audio in an MP4** (not MKV/HEVC). Unsupported uploads are auto-converted with ffmpeg in the background (`playback_status`: `processing` → `ready`). Poster images are optional: upload one (stored as **WebP**) or leave empty and a preview frame is extracted from the video.
 

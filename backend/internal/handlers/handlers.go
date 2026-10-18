@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -24,11 +26,18 @@ import (
 	"github.com/spread/homeflix/internal/transcode"
 )
 
-const maxUpload = 4 << 30 // 4 GiB
+const (
+	maxFormFieldBytes = 1 << 20
+	maxPosterBytes    = 32 << 20
+	maxSubtitleBytes  = 16 << 20
+)
+
+var errPartTooLarge = errors.New("form part is too large")
 
 type API struct {
-	Store     *store.Store
-	MediaRoot string
+	Store          *store.Store
+	MediaRoot      string
+	MaxUploadBytes int64
 
 	transcoding sync.Map // uuid.UUID string -> struct{}
 }
@@ -405,107 +414,189 @@ func (a *API) GetAnimation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
+type animationMeta struct {
+	name        string
+	description string
+	seriesID    *uuid.UUID
+	season      *int
+	episode     *int
+	sortOrder   int
+}
+
+func (a *API) parseAnimationMeta(ctx context.Context, fields map[string]string) (*animationMeta, int, string) {
+	m := &animationMeta{
+		name:        strings.TrimSpace(fields["name"]),
+		description: strings.TrimSpace(fields["description"]),
+	}
+	if m.name == "" {
+		return nil, http.StatusBadRequest, "name is required"
+	}
+	if raw := strings.TrimSpace(fields["series_id"]); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			return nil, http.StatusBadRequest, "invalid series_id"
+		}
+		if _, err := a.Store.GetSeries(ctx, id); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, http.StatusBadRequest, "series not found"
+			}
+			return nil, http.StatusInternalServerError, "failed to validate series"
+		}
+		m.seriesID = &id
+	}
+	var err error
+	if m.season, err = parseOptionalInt(fields["season"]); err != nil {
+		return nil, http.StatusBadRequest, "invalid season"
+	}
+	if m.episode, err = parseOptionalInt(fields["episode"]); err != nil {
+		return nil, http.StatusBadRequest, "invalid episode"
+	}
+	if raw := strings.TrimSpace(fields["sort_order"]); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, http.StatusBadRequest, "invalid sort_order"
+		}
+		m.sortOrder = n
+	}
+	return m, 0, ""
+}
+
+type uploadedSubtitle struct {
+	filename string
+	data     []byte
+}
+
+// CreateAnimation streams the multipart body so multi-GB videos are written
+// once, directly under MediaRoot. Text fields must be sent before the video part.
 func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
-	if err := r.ParseMultipartForm(64 << 20); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, a.MaxUploadBytes)
+	mr, err := r.MultipartReader()
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid multipart form")
 		return
 	}
 
-	name := strings.TrimSpace(r.FormValue("name"))
-	description := strings.TrimSpace(r.FormValue("description"))
-	if name == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
-		return
+	id := uuid.New()
+	fields := map[string]string{}
+	var (
+		meta     *animationMeta
+		videoExt string
+		videoCT  string
+		videoRel string
+		videoAbs string
+		poster   []byte
+		subFiles []uploadedSubtitle
+		subLangs []string
+	)
+	fail := func(status int, msg string) {
+		if videoAbs != "" {
+			_ = os.Remove(videoAbs)
+		}
+		writeError(w, status, msg)
 	}
 
-	var seriesID *uuid.UUID
-	if raw := strings.TrimSpace(r.FormValue("series_id")); raw != "" {
-		id, err := uuid.Parse(raw)
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid series_id")
+			fail(a.uploadReadError(err, http.StatusBadRequest, "invalid multipart form"))
 			return
 		}
-		if _, err := a.Store.GetSeries(r.Context(), id); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeError(w, http.StatusBadRequest, "series not found")
+
+		switch name := part.FormName(); {
+		case name == "video":
+			if meta != nil {
+				fail(http.StatusBadRequest, "only one video file is allowed")
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "failed to validate series")
-			return
+			m, status, msg := a.parseAnimationMeta(r.Context(), fields)
+			if m == nil {
+				fail(status, msg)
+				return
+			}
+			meta = m
+			videoExt = extOr(part.FileName(), ".mp4")
+			videoCT = part.Header.Get("Content-Type")
+			videoRel = filepath.Join("videos", id.String()+videoExt)
+			dest := filepath.Join(a.MediaRoot, videoRel)
+			if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+				fail(http.StatusInternalServerError, "failed to prepare storage")
+				return
+			}
+			if err := saveUpload(part, dest); err != nil {
+				fail(a.uploadReadError(err, http.StatusInternalServerError, "failed to save video"))
+				return
+			}
+			videoAbs = dest
+		case name == "poster":
+			data, err := readPart(part, maxPosterBytes)
+			if err != nil {
+				fail(a.uploadReadError(err, http.StatusBadRequest, "failed to read poster"))
+				return
+			}
+			if len(data) > 0 {
+				poster = data
+			}
+		case name == "subtitle":
+			data, err := readPart(part, maxSubtitleBytes)
+			if err != nil {
+				fail(a.uploadReadError(err, http.StatusBadRequest, "failed to read subtitle"))
+				return
+			}
+			if part.FileName() != "" {
+				subFiles = append(subFiles, uploadedSubtitle{filename: part.FileName(), data: data})
+			}
+		case part.FileName() != "":
+		default:
+			data, err := readPart(part, maxFormFieldBytes)
+			if err != nil {
+				fail(a.uploadReadError(err, http.StatusBadRequest, "invalid multipart form"))
+				return
+			}
+			if name == "subtitle_lang" {
+				subLangs = append(subLangs, string(data))
+			} else if _, ok := fields[name]; !ok {
+				fields[name] = string(data)
+			}
 		}
-		seriesID = &id
+		part.Close()
 	}
 
-	season, err := parseOptionalInt(r.FormValue("season"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid season")
-		return
-	}
-	episode, err := parseOptionalInt(r.FormValue("episode"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid episode")
-		return
-	}
-	sortOrder := 0
-	if raw := strings.TrimSpace(r.FormValue("sort_order")); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid sort_order")
-			return
-		}
-		sortOrder = n
-	}
-
-	videoFile, videoHeader, err := r.FormFile("video")
-	if err != nil {
+	if meta == nil {
 		writeError(w, http.StatusBadRequest, "video file is required")
 		return
 	}
-	defer videoFile.Close()
 
-	posterFile, _, posterErr := r.FormFile("poster")
-	hasPoster := posterErr == nil
-	if hasPoster {
-		defer posterFile.Close()
+	pendingSubs := make([]pendingSubtitle, 0, len(subFiles))
+	for i, s := range subFiles {
+		lang := ""
+		if i < len(subLangs) {
+			lang = subLangs[i]
+		}
+		p, err := newPendingSubtitle(s.filename, lang, io.NopCloser(bytes.NewReader(s.data)))
+		if err != nil {
+			fail(http.StatusBadRequest, err.Error())
+			return
+		}
+		pendingSubs = append(pendingSubs, p)
 	}
 
-	pendingSubs, err := a.readSubtitleUploads(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	id := uuid.New()
-	videoExt := extOr(videoHeader.Filename, ".mp4")
-	videoRel := filepath.Join("videos", id.String()+videoExt)
 	posterRel := filepath.Join("posters", id.String()+".webp")
-	videoAbs := filepath.Join(a.MediaRoot, videoRel)
 	posterAbs := filepath.Join(a.MediaRoot, posterRel)
-
-	if err := os.MkdirAll(filepath.Dir(videoAbs), 0o755); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to prepare storage")
-		return
-	}
 	if err := os.MkdirAll(filepath.Dir(posterAbs), 0o755); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to prepare storage")
+		fail(http.StatusInternalServerError, "failed to prepare storage")
 		return
 	}
-
-	if err := saveUpload(videoFile, videoAbs); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to save video")
-		return
-	}
-	if hasPoster {
-		if err := saveImageAsWebP(posterFile, posterAbs); err != nil {
-			_ = os.Remove(videoAbs)
-			writeError(w, http.StatusInternalServerError, "failed to save poster")
+	if poster != nil {
+		if err := saveImageAsWebP(bytes.NewReader(poster), posterAbs); err != nil {
+			fail(http.StatusInternalServerError, "failed to save poster")
 			return
 		}
 	} else if err := imageconv.ExtractFrameAsWebP(videoAbs, posterAbs); err != nil {
-		_ = os.Remove(videoAbs)
 		log.Printf("auto poster for %s: %v", id, err)
-		writeError(w, http.StatusInternalServerError, "failed to generate poster from video")
+		fail(http.StatusInternalServerError, "failed to generate poster from video")
 		return
 	}
 
@@ -540,7 +631,7 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 		savedSubPaths = append(savedSubPaths, abs)
 	}
 
-	contentType := videoHeader.Header.Get("Content-Type")
+	contentType := videoCT
 	if contentType == "" || contentType == "application/octet-stream" {
 		contentType = mimeFromExt(videoExt)
 	}
@@ -552,16 +643,16 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 
 	anim := &models.Animation{
 		ID:             id,
-		Name:           name,
-		Description:    description,
+		Name:           meta.name,
+		Description:    meta.description,
 		VideoPath:      videoRel,
 		PosterPath:     posterRel,
 		ContentType:    contentType,
 		PlaybackStatus: status,
-		SeriesID:       seriesID,
-		Season:         season,
-		Episode:        episode,
-		SortOrder:      sortOrder,
+		SeriesID:       meta.seriesID,
+		Season:         meta.season,
+		Episode:        meta.episode,
+		SortOrder:      meta.sortOrder,
 	}
 	if err := a.Store.Create(r.Context(), anim); err != nil {
 		cleanupCreate()
@@ -993,30 +1084,59 @@ func (a *API) readSubtitleUploads(r *http.Request) ([]pendingSubtitle, error) {
 	langs := r.MultipartForm.Value["subtitle_lang"]
 	out := make([]pendingSubtitle, 0, len(headers))
 	for i, h := range headers {
-		ext := strings.ToLower(filepath.Ext(h.Filename))
-		if ext != ".srt" && ext != ".vtt" {
-			return nil, errors.New("subtitle must be .srt or .vtt")
-		}
 		f, err := h.Open()
 		if err != nil {
 			return nil, errors.New("failed to read subtitle")
 		}
 		lang := ""
-		label := ""
-		if i < len(langs) && strings.TrimSpace(langs[i]) != "" {
-			lang = subtitles.NormalizeLang(langs[i])
-			label = subtitles.LabelFor(lang)
-		} else {
-			_, lang, label = subtitles.ParseFilename(h.Filename)
+		if i < len(langs) {
+			lang = langs[i]
 		}
-		out = append(out, pendingSubtitle{
-			file:  f,
-			ext:   ext,
-			lang:  lang,
-			label: label,
-		})
+		p, err := newPendingSubtitle(h.Filename, lang, f)
+		if err != nil {
+			f.Close()
+			return nil, err
+		}
+		out = append(out, p)
 	}
 	return out, nil
+}
+
+func newPendingSubtitle(filename, langRaw string, file multipartFile) (pendingSubtitle, error) {
+	ext := strings.ToLower(filepath.Ext(filename))
+	if ext != ".srt" && ext != ".vtt" {
+		return pendingSubtitle{}, errors.New("subtitle must be .srt or .vtt")
+	}
+	p := pendingSubtitle{file: file, ext: ext}
+	if strings.TrimSpace(langRaw) != "" {
+		p.lang = subtitles.NormalizeLang(langRaw)
+		p.label = subtitles.LabelFor(p.lang)
+	} else {
+		_, p.lang, p.label = subtitles.ParseFilename(filename)
+	}
+	return p, nil
+}
+
+func readPart(r io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, errPartTooLarge
+	}
+	return data, nil
+}
+
+func (a *API) uploadReadError(err error, status int, msg string) (int, string) {
+	var tooBig *http.MaxBytesError
+	if errors.As(err, &tooBig) {
+		return http.StatusRequestEntityTooLarge, fmt.Sprintf("upload exceeds the %d GiB limit (MAX_UPLOAD_GB)", a.MaxUploadBytes>>30)
+	}
+	if errors.Is(err, errPartTooLarge) {
+		return http.StatusBadRequest, err.Error()
+	}
+	return status, msg
 }
 
 func (a *API) StreamVideo(w http.ResponseWriter, r *http.Request) {

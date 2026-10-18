@@ -46,8 +46,9 @@ func main() {
 	}
 
 	api := &handlers.API{
-		Store:     store.New(pool),
-		MediaRoot: cfg.MediaRoot,
+		Store:          store.New(pool),
+		MediaRoot:      cfg.MediaRoot,
+		MaxUploadBytes: cfg.MaxUploadBytes,
 	}
 	api.QueuePendingTranscodes()
 
