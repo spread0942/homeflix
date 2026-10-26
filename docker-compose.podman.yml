@@ -1,0 +1,16 @@
+# Podman overlay (rootless): API socket + non-privileged host port.
+# Prefer: make podman-up   → http://localhost:8080
+#
+# To keep host port 80 instead, skip the ports/HMR overrides below and run:
+#   sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
+
+services:
+  traefik:
+    volumes:
+      - /run/user/${UID:-1000}/podman/podman.sock:/var/run/docker.sock:ro
+    ports: !override
+      - "8080:80"
+
+  frontend:
+    environment:
+      VITE_HMR_CLIENT_PORT: "8080"
