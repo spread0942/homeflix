@@ -14,3 +14,8 @@ services:
   frontend:
     environment:
       VITE_HMR_CLIENT_PORT: "8080"
+
+  # HOMEFLIX_MEDIA_DIR in .env (gitignored). Unset keeps the named media_data volume.
+  backend:
+    volumes: !override
+      - ${HOMEFLIX_MEDIA_DIR:-media_data}:/data
