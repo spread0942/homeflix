@@ -253,6 +253,9 @@ func (a *API) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ser.WithPosterURL()
+	if ser.PosterPath != nil {
+		ser.PosterURL = a.Store.VersionPosterURL(ser.PosterURL, *ser.PosterPath)
+	}
 	ser.EntryCount = 0
 	ser.Entries = []models.Animation{}
 	writeJSON(w, http.StatusCreated, ser)
@@ -685,6 +688,7 @@ func (a *API) CreateAnimation(w http.ResponseWriter, r *http.Request) {
 		anim = full
 	} else {
 		anim.WithURLs()
+		anim.PosterURL = a.Store.VersionPosterURL(anim.PosterURL, anim.PosterPath)
 	}
 	writeJSON(w, http.StatusCreated, anim)
 }

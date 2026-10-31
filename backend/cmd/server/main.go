@@ -46,7 +46,7 @@ func main() {
 	}
 
 	api := &handlers.API{
-		Store:          store.New(pool),
+		Store:          store.New(pool, cfg.MediaRoot),
 		MediaRoot:      cfg.MediaRoot,
 		MaxUploadBytes: cfg.MaxUploadBytes,
 	}

@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,18 +18,46 @@ import (
 )
 
 type Store struct {
-	pool *pgxpool.Pool
+	pool      *pgxpool.Pool
+	mediaRoot string
 }
 
-func New(pool *pgxpool.Pool) *Store {
-	return &Store{pool: pool}
+func New(pool *pgxpool.Pool, mediaRoot string) *Store {
+	return &Store{pool: pool, mediaRoot: mediaRoot}
+}
+
+// VersionPosterURL appends the poster file mtime so browsers fetch a new
+// image after a replacement. The path itself never changes, and without a
+// varying query the previous response stays in the HTTP cache.
+func (s *Store) VersionPosterURL(url, rel string) string {
+	return s.versionedPosterURL(url, rel)
+}
+
+func (s *Store) versionedPosterURL(url, rel string) string {
+	if url == "" || rel == "" || s.mediaRoot == "" {
+		return url
+	}
+	info, err := os.Stat(filepath.Join(s.mediaRoot, rel))
+	if err != nil {
+		return url
+	}
+	v := strconv.FormatInt(info.ModTime().UnixMilli(), 10)
+	if strings.Contains(url, "?") {
+		return url + "&v=" + v
+	}
+	return url + "?v=" + v
+}
+
+func (s *Store) decorateAnimation(a *models.Animation) {
+	a.WithURLs()
+	a.PosterURL = s.versionedPosterURL(a.PosterURL, a.PosterPath)
 }
 
 const animationSelect = `
 	a.id, a.name, a.description, a.video_path, a.poster_path, a.content_type, a.playback_status,
 	a.series_id, COALESCE(s.name, ''), a.season, a.episode, a.sort_order, a.created_at`
 
-func scanAnimation(row pgx.Row) (*models.Animation, error) {
+func (s *Store) scanAnimation(row pgx.Row) (*models.Animation, error) {
 	var a models.Animation
 	err := row.Scan(
 		&a.ID, &a.Name, &a.Description, &a.VideoPath, &a.PosterPath, &a.ContentType, &a.PlaybackStatus,
@@ -35,11 +66,11 @@ func scanAnimation(row pgx.Row) (*models.Animation, error) {
 	if err != nil {
 		return nil, err
 	}
-	a.WithURLs()
+	s.decorateAnimation(&a)
 	return &a, nil
 }
 
-func scanAnimationRows(rows pgx.Rows) ([]models.Animation, error) {
+func (s *Store) scanAnimationRows(rows pgx.Rows) ([]models.Animation, error) {
 	var out []models.Animation
 	for rows.Next() {
 		var a models.Animation
@@ -49,7 +80,7 @@ func scanAnimationRows(rows pgx.Rows) ([]models.Animation, error) {
 		); err != nil {
 			return nil, err
 		}
-		a.WithURLs()
+		s.decorateAnimation(&a)
 		out = append(out, a)
 	}
 	if out == nil {
@@ -82,7 +113,7 @@ func (s *Store) List(ctx context.Context, q string) ([]models.Animation, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	out, err := scanAnimationRows(rows)
+	out, err := s.scanAnimationRows(rows)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +146,7 @@ func (s *Store) ListStandalone(ctx context.Context, q string) ([]models.Animatio
 		return nil, err
 	}
 	defer rows.Close()
-	out, err := scanAnimationRows(rows)
+	out, err := s.scanAnimationRows(rows)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +162,7 @@ func (s *Store) Get(ctx context.Context, id uuid.UUID) (*models.Animation, error
 		FROM animations a
 		LEFT JOIN series s ON s.id = a.series_id
 		WHERE a.id = $1`, id)
-	a, err := scanAnimation(row)
+	a, err := s.scanAnimation(row)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +171,7 @@ func (s *Store) Get(ctx context.Context, id uuid.UUID) (*models.Animation, error
 		return nil, err
 	}
 	a.Subtitles = tracks
-	a.WithURLs()
+	s.decorateAnimation(a)
 	return a, nil
 }
 
@@ -223,7 +254,7 @@ func (s *Store) ListNeedingTranscode(ctx context.Context) ([]models.Animation, e
 		return nil, err
 	}
 	defer rows.Close()
-	return scanAnimationRows(rows)
+	return s.scanAnimationRows(rows)
 }
 
 func (s *Store) Delete(ctx context.Context, id uuid.UUID) (*models.Animation, error) {
@@ -385,7 +416,7 @@ func (s *Store) ListBySeries(ctx context.Context, seriesID uuid.UUID) ([]models.
 		return nil, err
 	}
 	defer rows.Close()
-	out, err := scanAnimationRows(rows)
+	out, err := s.scanAnimationRows(rows)
 	if err != nil {
 		return nil, err
 	}
@@ -505,7 +536,7 @@ func (s *Store) ListSeries(ctx context.Context, q string) ([]models.Series, erro
 		); err != nil {
 			return nil, err
 		}
-		applySeriesPoster(&ser, fallback)
+		s.applySeriesPoster(&ser, fallback)
 		out = append(out, ser)
 	}
 	if out == nil {
@@ -531,7 +562,7 @@ func (s *Store) GetSeries(ctx context.Context, id uuid.UUID) (*models.Series, er
 	if err != nil {
 		return nil, err
 	}
-	applySeriesPoster(&ser, fallback)
+	s.applySeriesPoster(&ser, fallback)
 	entries, err := s.ListBySeries(ctx, id)
 	if err != nil {
 		return nil, err
@@ -710,13 +741,14 @@ func (s *Store) filmViewFlags(ctx context.Context) (viewed, completed map[uuid.U
 	return viewed, completed, rows.Err()
 }
 
-func applySeriesPoster(ser *models.Series, fallback *string) {
+func (s *Store) applySeriesPoster(ser *models.Series, fallback *string) {
 	if ser.PosterPath != nil && *ser.PosterPath != "" {
 		ser.WithPosterURL()
+		ser.PosterURL = s.versionedPosterURL(ser.PosterURL, *ser.PosterPath)
 		return
 	}
 	if fallback != nil && *fallback != "" {
-		ser.PosterURL = "/api/series/" + ser.ID.String() + "/poster"
+		ser.PosterURL = s.versionedPosterURL("/api/series/"+ser.ID.String()+"/poster", *fallback)
 	}
 }
 
@@ -841,7 +873,7 @@ func (s *Store) ListContinueWatching(ctx context.Context, limit int) ([]models.C
 			if r.progress.Completed {
 				continue
 			}
-			out = append(out, continueItemFromRow(r, false))
+			out = append(out, s.continueItemFromRow(r, false))
 		} else if r.progress.Completed {
 			entries, ok := seriesCache[*r.seriesID]
 			if !ok {
@@ -853,14 +885,14 @@ func (s *Store) ListContinueWatching(ctx context.Context, limit int) ([]models.C
 			}
 			next := nextPlayableAfter(entries, r.progress.AnimationID)
 			if next != nil {
-				item := continueItemFromAnimation(next, r.seriesName, r.seriesPoster, r.progress.UpdatedAt)
+				item := s.continueItemFromAnimation(next, r.seriesName, r.seriesPoster, r.progress.UpdatedAt)
 				out = append(out, item)
 			} else {
-				item := continueItemFromRow(r, true)
+				item := s.continueItemFromRow(r, true)
 				out = append(out, item)
 			}
 		} else {
-			out = append(out, continueItemFromRow(r, false))
+			out = append(out, s.continueItemFromRow(r, false))
 		}
 
 		if len(out) >= limit {
@@ -889,7 +921,7 @@ func nextPlayableAfter(entries []models.Animation, currentID uuid.UUID) *models.
 	return nil
 }
 
-func continueItemFromRow(r progressRow, seriesComplete bool) models.ContinueWatchingItem {
+func (s *Store) continueItemFromRow(r progressRow, seriesComplete bool) models.ContinueWatchingItem {
 	item := models.ContinueWatchingItem{
 		AnimationID:     r.progress.AnimationID,
 		Name:            r.name,
@@ -904,11 +936,11 @@ func continueItemFromRow(r progressRow, seriesComplete bool) models.ContinueWatc
 		EntryLabel:      models.EntryLabel(r.season, r.episode, r.sortOrder),
 		SeriesComplete:  seriesComplete,
 	}
-	item.PosterURL = continuePosterURL(r.seriesID, r.seriesPoster, r.progress.AnimationID, r.posterPath)
+	item.PosterURL = s.continuePosterURL(r.seriesID, r.seriesPoster, r.progress.AnimationID, r.posterPath)
 	return item
 }
 
-func continueItemFromAnimation(a *models.Animation, seriesName string, seriesPoster *string, updatedAt time.Time) models.ContinueWatchingItem {
+func (s *Store) continueItemFromAnimation(a *models.Animation, seriesName string, seriesPoster *string, updatedAt time.Time) models.ContinueWatchingItem {
 	item := models.ContinueWatchingItem{
 		AnimationID:     a.ID,
 		Name:            a.Name,
@@ -923,20 +955,20 @@ func continueItemFromAnimation(a *models.Animation, seriesName string, seriesPos
 		EntryLabel:      models.EntryLabel(a.Season, a.Episode, a.SortOrder),
 		SeriesComplete:  false,
 	}
-	item.PosterURL = continuePosterURL(a.SeriesID, seriesPoster, a.ID, a.PosterPath)
+	item.PosterURL = s.continuePosterURL(a.SeriesID, seriesPoster, a.ID, a.PosterPath)
 	return item
 }
 
-func continuePosterURL(seriesID *uuid.UUID, seriesPoster *string, animationID uuid.UUID, animPoster string) string {
+func (s *Store) continuePosterURL(seriesID *uuid.UUID, seriesPoster *string, animationID uuid.UUID, animPoster string) string {
 	if seriesID != nil && seriesPoster != nil && *seriesPoster != "" {
-		return "/api/series/" + seriesID.String() + "/poster"
+		return s.versionedPosterURL("/api/series/"+seriesID.String()+"/poster", *seriesPoster)
 	}
 	if seriesID != nil && animPoster != "" {
 		// series may use first-entry fallback via series poster endpoint
-		return "/api/series/" + seriesID.String() + "/poster"
+		return s.versionedPosterURL("/api/series/"+seriesID.String()+"/poster", animPoster)
 	}
 	if animPoster != "" {
-		return "/api/animations/" + animationID.String() + "/poster"
+		return s.versionedPosterURL("/api/animations/"+animationID.String()+"/poster", animPoster)
 	}
 	return ""
 }
